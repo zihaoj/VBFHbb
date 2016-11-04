@@ -143,7 +143,7 @@ class PhysicsProcess:
             stop = 3000000
 
         newarray = rnp.tree2array(self.tree, varname, stop=stop)
-        if "mBB" in varname or "pTBB" in varname or "pTJJ" in varname or "mJJ" in varname or "HT" in varname:
+        if "mBB" in varname or "pTBB" in varname or "pTJJ" in varname or "mJJ" in varname or "HT" in varname or "pTB1" in varname or "pTB2" in varname:
             self.var[varname] = newarray/1000.
         else:
             self.var[varname] = newarray
@@ -177,9 +177,10 @@ class PhysicsProcess:
 
 
 class FitResults:
-    def __init__(self, fitname, region, fitfunction, ndof):
+    def __init__(self, fitname, region, channel, fitfunction, ndof):
         self.fitname = fitname
         self.region = region
+        self.channel = channel
         self.fit = deepcopy(fitfunction)
         print fitfunction
         self.xmlform = ""
@@ -204,28 +205,46 @@ class FitResults:
     def GetxmlForm(self):
 
         self.GetFitPar()
-        text = ""
+        functiontext = ""
         
         if self.fitname == "BernsteinO3":
-            text = '''<ModelItem Name="EXPR::Bernstein3{!s}('@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3])
+            functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3])
 
         if self.fitname == "BernsteinO4":
-            text = '''<ModelItem Name="EXPR::Bernstein4{!s}('@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+            functiontext = '''<ModelItem Name="EXPR::Bernstein4{!s}('@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+
+        if self.fitname == "BernsteinO5":
+            functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5])
+
+        if self.fitname == "ExpoBernsteinO3":
+            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein3{!s}('exp(@1*@0)*(@2*pow((1-@0), 3) + 3*@3*@0*pow((1-@0), 2) + 3*@4*(1-@0)*pow(@0, 2) + @5*pow(@0, 3))', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+
+        if self.fitname == "ExpoBernsteinO4":
+            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein4{!s}('exp(@1*@0)*(@2*pow((1-@0), 4) + 4*@3*@0*pow((1-@0), 3) + 6*@4*pow(@0, 2)*pow((1-@0),2) + 4*@5*(1-@0)*pow(@0, 3) + @6*pow(@0, 4))', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5])
+
+        if self.fitname == "ExpoBernsteinO5":
+            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein5{!s}('exp(@1*@0)*(@2*pow((1-@0), 5) + 5*@3*@0*pow((1-@0), 4) + 10*@4*pow(@0, 2)*pow((1-@0),3) + 10*@5*pow(@0, 3)*pow((1-@0), 2) + 5*@6*(1-@0)*pow(@0, 4) + @7*pow(@0, 5))', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}], x17[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.fitpar[6], self.fitpardn[6],self.fitparup[6])
 
         if self.fitname == "Expo":
-            text = '''<ModelItem Name="EXPR::EXP{!s}('exp(@1+@0*@2)', :observable:, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1])
+            functiontext = '''<ModelItem Name="EXPR::EXP{!s}('exp(@1+@0*@2)', :observable:, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1])
             
-        self.xmlform = text
+        self.xmlform = functiontext
 
-        fit_results_txt = open("f_"+self.fitname+"_"+self.region, "a")
+        fit_results_xml = open("FitFiles_"+self.channel+"/bkg_"+self.fitname+"_"+self.region+".xml", "a")
 
-        for ipar in range(self.fit.GetNumberFreeParameters()):
-            fit_results_txt.write(str(self.fit.GetParameter(ipar))+"\n")
+        #for ipar in range(self.fit.GetNumberFreeParameters()):
+        #    fit_results_xml.write(str(self.fit.GetParameter(ipar))+"\n")
 
-        fit_results_txt.write("chi2 "+str(self.chi)+"\n")
-        fit_results_txt.write("chi2 ndof "+str(self.chindof)+"\n")
-        fit_results_txt.write("chi2 Prob "+str(self.chinprob)+"\n")
-        fit_results_txt.write(self.xmlform+"\n")
+        #fit_results_xml.write("chi2 "+str(self.chi)+"\n")
+        #fit_results_xml.write("chi2 ndof "+str(self.chindof)+"\n")
+        #fit_results_xml.write("chi2 Prob "+str(self.chinprob)+"\n")
+
+
+        fit_results_xml.write('''<!DOCTYPE Model SYSTEM 'AnaWSBuilder.dtd'>'''+"\n")
+        fit_results_xml.write('''  <Item Name="expr::x('((@0-@2)/@1)', :observable:, range[220.], shift[80.])"/>'''+"\n")
+        fit_results_xml.write('''  <Model Type="UserDef">'''+"\n")
+        fit_results_xml.write("  "+self.xmlform+"\n")
+        fit_results_xml.write('''</Model>''')
 
         print self.region
         print "FitName", self.fitname
@@ -233,6 +252,10 @@ class FitResults:
         print "Fit Chi2 chi", self.chindof
 
 
+
 def CalFtest(fit1, fit2):
     print fit1.fitname, fit2.fitname
     print 1.-Math.fdistribution_cdf( fit1.chindof/fit2.chindof, fit1.ndof, fit2.ndof)
+
+
+

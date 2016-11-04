@@ -6,7 +6,7 @@ from cStringIO import StringIO
 
 fit_start = 80
 fit_end = 300
-fit_range = fit_start-fit_end
+fit_range = fit_end-fit_start
 
 ################### Bernstein functions
 def BernsteinO2_raw(x, par):
@@ -90,7 +90,7 @@ def ExpoBernsteinO5_raw(x, par):
 ExpoBernsteinO5 = TF1("ExpoBernsteinO5", ExpoBernsteinO5_raw, fit_start, fit_end, 7)
 
 
-###################### Sun of Exponentials
+###################### Sum of Exponentials
 def Expo_raw(x, par):
     try:
         return exp(par[0]+par[1]*(x[0]-fit_start)/fit_range)
@@ -100,14 +100,14 @@ def Expo_raw(x, par):
 Expo = TF1("Expo", Expo_raw, fit_start, fit_end, 2)
 
 def Expo2_raw(x, par):
-    try:
-        return (exp(par[0]+par[1]*(x[0]-fit_start)/fit_range) + exp(par[2]+par[3]*(x[0]-fit_start)/fit_range))
-    except OverflowError:
-        return -1
+    return (exp(par[0]+par[1]*(x[0]-fit_start)/fit_range) + exp(par[2]+par[3]*(x[0]-fit_start)/fit_range))
 
 Expo2 = TF1("Expo2", Expo2_raw, fit_start, fit_end, 4)
 
+def Expo3_raw(x, par):
+    return (exp(par[0]+par[1]*(x[0]-fit_start)/fit_range) + exp(par[2]+par[3]*(x[0]-fit_start)/fit_range) + exp(par[4]+par[5]*(x[0]-fit_start)/fit_range))
 
+Expo3 = TF1("Expo3", Expo3_raw, fit_start, fit_end, 6)
 
 
 ####################### Fitting Utils
@@ -176,6 +176,7 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
 
             if bkgname == "BernsteinO4":
                 bkg = par[0]*(1-((bincen-fit_start)/fit_range))**4 + par[1]*(4*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**3) + par[2]*(6*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))**2) + par[3]*(4*((bincen-fit_start)/fit_range)**3*(1-((bincen-fit_start)/fit_range))) + par[4]*((bincen-fit_start)/fit_range)**4
+
             if bkgname == "BernsteinO5":
                 bkg = par[0]*(1-((bincen-fit_start)/fit_range))**5 + par[1]*(5*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**4) + par[2]*(10*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))**3) + par[3]*(10*((bincen-fit_start)/fit_range)**3*(1-((bincen-fit_start)/fit_range))**2) + par[4]*(5*((bincen-fit_start)/fit_range)**4*(1-((bincen-fit_start)/fit_range))) + par[5]*((bincen-fit_start)/fit_range)**5
 
@@ -204,18 +205,32 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
                 except OverflowError:
                     bkg = 0
 
+            if bkgname == "Expo2":
+                try:
+                    bkg = exp(par[0]+par[1]*(bincen-fit_start)/fit_range) + exp(par[2]+par[3]*(bincen-fit_start)/fit_range)
+                    #bkg = exp(par[0]+par[1]*bincen) + exp(par[2]+par[3]*bincen)
+                except OverflowError:
+                    bkg = 0
+
+            if bkgname == "Expo3":
+                try:
+                    bkg = exp(par[0]+par[1]*(bincen-fit_start)/fit_range) + exp(par[2]+par[3]*(bincen-fit_start)/fit_range) + exp(par[4]+par[5]*(bincen-fit_start)/fit_range)
+                except OverflowError:
+                    bkg = 0
+
 
             mu_x =  bkg
             
-            if isBkgPlusZFit:
-                mu_x = mu_x + (par[partot-1] *z_x[ibin])
+            #if isBkgPlusZFit:
+            #    mu_x = mu_x + (par[partot-1] *z_x[ibin])
 
             if isSpuriousFit:
                 mu_x =  mu_x + par[partot-2] *signal_x[ibin]
 
             #L = L + mu_x - data*log(mu_x)
+                
             L = L + ((mu_x - data)/data_error[ibin])**2
-
+            
         f[0] = L
 
     # initialize the TMinuit object
@@ -252,14 +267,35 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
     vstart[partot-2] = 0
 
     step = [0.1] * partot
-    upper = [1000000]*partot
-    lower = [2]*partot
+    upper = [10000000]*partot
+    lower = [0.1]*partot
     varname =[]
 
-    if "Expo" in bkgname:
+    #bkg = exp(par[0]+par[1]*(bincen-fit_start)/fit_range) + exp(par[2]+par[3]*(bincen-fit_start)/fit_range)
+
+    if "ExpoBernstein" in bkgname:
         vstart[0] = -10
         upper[0] = 0
-        lower[0] = -200
+        lower[0] = -500
+
+    elif "Expo2" in bkgname:
+        vstart[1] = -5
+        vstart[3] = 0
+        upper[1] = 0
+        upper[3] = 10000
+        lower[1] = -10000
+        lower[3] = -10000
+
+    elif "Expo3" in bkgname:
+        vstart[1] = -100
+        vstart[3] = -10
+        vstart[5] = -5
+        upper[1] = 0
+        upper[3] = 500
+        upper[5] = 500
+        lower[1] = -500
+        lower[3] = -500
+        lower[5] = -500
 
     for i in range( parfunction):
         varname.append("p"+str(i))
@@ -276,8 +312,8 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
     if isSpuriousFit:
         upper[partot-2] = 10.0
         lower[partot-2] = -10.0
-        step[partot-2] = 0.001
-        vstart[partot-2] = 0.5
+        step[partot-2] = 0.1
+        vstart[partot-2] = 1
     
     for i in range(partot):
         gMinuit.mnparm(i, varname[i], vstart[i], step[i], lower[i], upper[i], ierflag)
@@ -287,6 +323,8 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
         gMinuit.FixParameter(partot-2)        
         
     if not doFloatZ:
+        lower[partot-1] = 1
+        upper[partot-1] = 1
         gMinuit.FixParameter(partot-1)
 
     if not isBkgPlusZFit:
@@ -341,6 +379,7 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
                         
     for p in range(bkgfunction.GetNumberFreeParameters()):
         bkgfunction.SetParameter(p, fitval[p])
+        print "fit uncert",  fiterr_p[p]
 
     bkgfunction.SetChisquare(fmin_p[0])
 

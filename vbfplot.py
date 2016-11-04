@@ -4,11 +4,10 @@ import rootpy.tree
 from rootpy.io import root_open
 from ROOT import gDirectory, TLorentzVector, TVector3, TH1D, TH2D, TFile, RooStats, TMath
 from HistoLab import HistoTool, CopyHist, StackHists, GetPlot, ScaleHist, Project2D, CopyHists, project1D, NormHists, AddHistPairs, ResetBins, GetHistMedian, GetHistIQR, GetRatios, GetAveRatios, GetGausMean, CalSysVariation, CalSysDiff
-from FitFunctions import BernsteinO2, BernsteinO3, BernsteinO4, BernsteinO5, ExpoBernsteinO2, ExpoBernsteinO3, ExpoBernsteinO4, ExpoBernsteinO5, Expo, Expo2
-from FitFunctions import BernsteinO2_raw, BernsteinO3_raw, BernsteinO4_raw, BernsteinO5_raw, ExpoBernsteinO2_raw, ExpoBernsteinO3_raw, ExpoBernsteinO4_raw, ExpoBernsteinO5_raw, Expo_raw, Expo2_raw
+from FitFunctions import BernsteinO2, BernsteinO3, BernsteinO4, BernsteinO5, ExpoBernsteinO2, ExpoBernsteinO3, ExpoBernsteinO4, ExpoBernsteinO5, Expo, Expo2, Expo3
+from FitFunctions import BernsteinO2_raw, BernsteinO3_raw, BernsteinO4_raw, BernsteinO5_raw, ExpoBernsteinO2_raw, ExpoBernsteinO3_raw, ExpoBernsteinO4_raw, ExpoBernsteinO5_raw, Expo_raw, Expo2_raw, Expo3_raw
 from FitFunctions import BernsteinO2Lin, BernsteinO3Lin, BernsteinO4Lin
 from FitFunctions import bkgfit, bkgfit_2Region, fit_start, fit_end, fit_range
-
 
 #from rootpy.root2array import tree_to_ndarray
 import root_numpy as rnp
@@ -23,9 +22,6 @@ from copy import deepcopy
 from MVA import * 
 from Utils import *
 import os
-
-os.system("rm f_*")
-os.system("rm workspace_*")
 
 DrawTool = HistoTool()
 DrawTool.lumi = "0"
@@ -57,7 +53,12 @@ p.add_option('--MVAList', type = "string", default = 'short',   dest = 'MVAList'
 p.add_option('--test', action="store_true", default = False, dest = 'test', help = 'test mode')
 p.add_option('--fit', action="store_true", default = False, dest = 'fit', help = 'fit mode')
 p.add_option('--channel', type="string", default = '4cen', dest = 'channel', help = 'channel')
+p.add_option('--spurious', type="string", default = '2tag', dest = 'spurious', help = 'spurious type')
 (o,a) = p.parse_args()
+
+os.system("rm f_*"+o.channel+"*")
+os.system("rm workspace_*"+o.channel+"*")
+os.system("rm FitFiles_"+o.channel+"/*")
 
 mBB_bin_width = 2
 
@@ -112,10 +113,16 @@ def InitSamples():
     if o.channel == "2cen":
         #VBF = PhysicsProcess("VBF H->bb", "input/VBF_Reader_10_19_2cen_tight.root")
         #VBF = PhysicsProcess("VBF H->bb", "input/VBF_Reader_10_17_2cen_MediumBTAG.root")
+
         VBF = PhysicsProcess("VBF H->bb", "input/VBF_Reader_10_19_2cen.root")
         ggF = PhysicsProcess("ggF H->bb", "input/ggF_Reader_10_27_2cen.root")
-        data_0tag = PhysicsProcess("data 0tag", "input/data_ICHEP_Reader_10_28_0tag_2cen.root")
         data_2tag = PhysicsProcess("data 2tag", "input/data_2tag_10_12_2cen.root")
+
+        #VBF = PhysicsProcess("VBF H->bb", "input/VBF_Reader_11_02_2cen_BTAG_Medium.root")
+        #ggF = PhysicsProcess("ggF H->bb", "input/ggF_Reader_11_02_2cen_BTAG_Medium.root")
+        #data_2tag = PhysicsProcess("data 2tag", "input/data_ICHEP_Reader_11_01_2tag_2cen_BTAG_Medium.root")
+
+        data_0tag = PhysicsProcess("data 0tag", "input/data_ICHEP_Reader_10_28_0tag_2cen.root")
         Zbb_QCD = PhysicsProcess("QCD Z->bb", "input/Zbb_QCD_Reader_10_27_2cen.root")
         Zbb_EWK = PhysicsProcess("EWK Z->bb", "input/Zbb_EWK_Reader_10_27_2cen.root")
 
@@ -138,7 +145,6 @@ def InitSamples():
 #    SAMPLES["VBF_BMED_TrigMatch_NoWeight"] = VBF_BMED_TrigMatch_NoWeight
 
 #    for sys in SYSLIST:
-#
 #        SYSSAMPLES["VBF_"+sys] = PhysicsProcess("VBF H->bb "+sys, "VBF_09_16.root", sys)
 #        SYSSAMPLES["ggF_"+sys] = PhysicsProcess("ggF H->bb "+sys, "ggF_09_16.root", sys)
 #        SYSSAMPLES["Zbb_QCD_"+sys] = PhysicsProcess("QCD Z->bb "+sys, "Zbb_QCD_09_16.root", sys)
@@ -160,6 +166,9 @@ def InitSamples():
         ### Load event weight
         SAMPLES[s].AddEventVarFromTree("eventWeight", o.test)
         SAMPLES[s].AddEventVarFromTree("weightSysts", o.test)
+
+        ### back up event weight used only for control region no blinding
+        SAMPLES[s].var["eventWeight_noblind"]= SAMPLES[s].var["eventWeight"]
 
         ### Load event variable
         SAMPLES[s].AddEventVarFromTree("nJets", o.test)
@@ -209,9 +218,13 @@ def InitSamples():
         SAMPLES[s].AddEventVarFromTree("NTrk500PVJ1", o.test)
         SAMPLES[s].AddEventVarFromTree("NTrk500PVJ2", o.test)
 
+        SAMPLES[s].AddEventVarFromTree("pTB1", o.test)
+        SAMPLES[s].AddEventVarFromTree("pTB2", o.test)
+
         if o.channel == "2cen":
             SAMPLES[s].AddEventVarFromTree("HadronConeExclTruthLabelB1", o.test)
             SAMPLES[s].AddEventVarFromTree("HadronConeExclTruthLabelB2", o.test)
+            SAMPLES[s].AddCut("SecondBNotTrue",  SAMPLES[s].var["HadronConeExclTruthLabelB2"]<5)
 
         ### Load jet variables
 #        for i in range(np.max(SAMPLES[s].var["nJets"])):
@@ -291,14 +304,12 @@ def InitSamples():
 
 
 def BlindData():
-
     for s in SAMPLES:
         if "data_2tag" in s:
             blindarray = np.logical_or( SAMPLES[s].var["mBB"]<100, SAMPLES[s].var["mBB"]>140)
             SAMPLES[s].var["eventWeight"] *= blindarray
 
 def ApplyBtag():
-
     for s in SAMPLES:
         btagarray = None
         if "0tag" in s:
@@ -306,14 +317,14 @@ def ApplyBtag():
             SAMPLES[s].var["eventWeight"] *= btagarray
 
 def ApplypTBBCut():
-    ptCut = 140
     if o.channel == "2cen":
         pTCut = 160
     if o.channel == "4cen":
-        pTCut = 150
-
+        pTCut = 140
     for s in SAMPLES:
         SAMPLES[s].var["eventWeight"] = (SAMPLES[s].var["pTBB"]>pTCut) * SAMPLES[s].var["eventWeight"]
+        SAMPLES[s].var["eventWeight_noblind"] = (SAMPLES[s].var["pTBB"]>pTCut) * SAMPLES[s].var["eventWeight_noblind"]
+
 
 def ApplymJJCut():
 
@@ -469,19 +480,9 @@ def ComputeMVAWeights(varlist):
                      [ MVAPRED["BDT_bkg_train"], MVAPRED["BDT_bkg_test"]],
                      ["BDT train", "BDT test"] )
 
-#    NN_Cut_00   = np.percentile( MVAPRED["NN_VBF_full"], 0 )
-#    NN_Cut_10   = np.percentile( MVAPRED["NN_VBF_full"], 10 )
-#    NN_Cut_20   = np.percentile( MVAPRED["NN_VBF_full"], 20 )
-#    NN_Cut_30   = np.percentile( MVAPRED["NN_VBF_full"], 30 )
-#    NN_Cut_40   = np.percentile( MVAPRED["NN_VBF_full"], 40 )
-#    NN_Cut_50   = np.median( MVAPRED["NN_VBF_full"] )
-#    NN_Cut_60   = np.percentile( MVAPRED["NN_VBF_full"], 60 )
-#    NN_Cut_70   = np.percentile( MVAPRED["NN_VBF_full"], 70 )
-#    NN_Cut_80   = np.percentile( MVAPRED["NN_VBF_full"], 80 )
-#    NN_Cut_90   = np.percentile( MVAPRED["NN_VBF_full"], 90 )
-#    NN_Cut_95   = np.percentile( MVAPRED["NN_VBF_full"], 95 )
-
     BDT_Cut_00  = np.percentile( MVAPRED["BDT_VBF_full"], 0 )
+    BDT_Cut_03  = np.percentile( MVAPRED["BDT_VBF_full"], 3 )
+    BDT_Cut_05  = np.percentile( MVAPRED["BDT_VBF_full"], 5 )
     BDT_Cut_10  = np.percentile( MVAPRED["BDT_VBF_full"], 10 )
     BDT_Cut_20  = np.percentile( MVAPRED["BDT_VBF_full"], 20 )
     BDT_Cut_30  = np.percentile( MVAPRED["BDT_VBF_full"], 30 )
@@ -494,17 +495,6 @@ def ComputeMVAWeights(varlist):
     BDT_Cut_95  = np.percentile( MVAPRED["BDT_VBF_full"], 95 )
     
     for s in SAMPLES:
-#        SAMPLES[s].AddCut("PassNNCut00",    MVAPRED["NN_"+s+"_full"]>NN_Cut_00 )
-#        SAMPLES[s].AddCut("PassNNCut10",    MVAPRED["NN_"+s+"_full"]>NN_Cut_10 )
-#        SAMPLES[s].AddCut("PassNNCut20",    MVAPRED["NN_"+s+"_full"]>NN_Cut_20 )
-#        SAMPLES[s].AddCut("PassNNCut30",    MVAPRED["NN_"+s+"_full"]>NN_Cut_30 )
-#        SAMPLES[s].AddCut("PassNNCut40",    MVAPRED["NN_"+s+"_full"]>NN_Cut_40 )
-#        SAMPLES[s].AddCut("PassNNCut50",    MVAPRED["NN_"+s+"_full"]>NN_Cut_50 )
-#        SAMPLES[s].AddCut("PassNNCut60",    MVAPRED["NN_"+s+"_full"]>NN_Cut_60 )
-#        SAMPLES[s].AddCut("PassNNCut70",    MVAPRED["NN_"+s+"_full"]>NN_Cut_70 )
-#        SAMPLES[s].AddCut("PassNNCut80",    MVAPRED["NN_"+s+"_full"]>NN_Cut_80 )
-#        SAMPLES[s].AddCut("PassNNCut90",    MVAPRED["NN_"+s+"_full"]>NN_Cut_90 )
-#        SAMPLES[s].AddCut("PassNNCut95",    MVAPRED["NN_"+s+"_full"]>NN_Cut_95 )
 
         SAMPLES[s].AddCut("PassBDTCut00",   MVAPRED["BDT_"+s+"_full"]>BDT_Cut_00 )
         SAMPLES[s].AddCut("PassBDTCut10",   MVAPRED["BDT_"+s+"_full"]>BDT_Cut_10 )
@@ -518,12 +508,18 @@ def ComputeMVAWeights(varlist):
         SAMPLES[s].AddCut("PassBDTCut90",   MVAPRED["BDT_"+s+"_full"]>BDT_Cut_90 )
         SAMPLES[s].AddCut("PassBDTCut95",   MVAPRED["BDT_"+s+"_full"]>BDT_Cut_95 )
         
+        SAMPLES[s].AddCut("PassBDTCut00-03",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_03,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_00)  )
+        SAMPLES[s].AddCut("PassBDTCut00-05",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_05,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_00)  )
+        SAMPLES[s].AddCut("PassBDTCut00-10",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_10,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_00)  )
+        SAMPLES[s].AddCut("PassBDTCut00-20",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_20,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_00)  )
         SAMPLES[s].AddCut("PassBDTCut20-40",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_40,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_20)  )
         SAMPLES[s].AddCut("PassBDTCut40-60",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_60,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_40)  )
         SAMPLES[s].AddCut("PassBDTCut60-80",    np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_80,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_60)  )
         SAMPLES[s].AddCut("PassBDTCut80-100",    MVAPRED["BDT_"+s+"_full"]>BDT_Cut_80 )
 
 
+        SAMPLES[s].AddCut("BDTI",    MVAPRED["BDT_"+s+"_full"]>BDT_Cut_80 )
+        SAMPLES[s].AddCut("BDTII",   np.logical_and(MVAPRED["BDT_"+s+"_full"]<BDT_Cut_80,MVAPRED["BDT_"+s+"_full"]>BDT_Cut_60)  )
 
 
 def CalculateSensitivity(MVAcuts):
@@ -533,25 +529,29 @@ def CalculateSensitivity(MVAcuts):
 
         print ("------------------")
         print (cut)
-    
+
+        sideband_0tag_full_evts = sum(SAMPLES["data_0tag"].var["eventWeight"]* (SAMPLES["data_0tag"].cut["fitband"].array) )    
         sideband_0tag_evts = sum(SAMPLES["data_0tag"].var["eventWeight"]* SAMPLES["data_0tag"].cut[cut].array* (SAMPLES["data_0tag"].cut["fitband"].array) )
         sideband_2tag_evts = sum(SAMPLES["data_2tag"].var["eventWeight"]* SAMPLES["data_2tag"].cut[cut].array* (SAMPLES["data_2tag"].cut["fitband"].array) )
+
 
         scale_factor = sideband_2tag_evts / sideband_0tag_evts
 
         print ("2tag sidebands", sideband_2tag_evts)
         print ("0tag sidebands", sideband_0tag_evts)
+        print ("0tag full sidebands", sideband_0tag_full_evts)
         print ("scale factor", sideband_2tag_evts / sideband_0tag_evts)
         
         nvbf = sum(SAMPLES["VBF"].var["eventWeight"] * SAMPLES["VBF"].cut["signal"].array * SAMPLES["VBF"].cut[cut].array / 10*9.9)
         nggf = sum(SAMPLES["ggF"].var["eventWeight"] * SAMPLES["ggF"].cut["signal"].array * SAMPLES["ggF"].cut[cut].array / 10*9.9)
         n0tag = sum(SAMPLES["data_0tag"].var["eventWeight"] * SAMPLES["data_0tag"].cut["signal"].array * SAMPLES["data_0tag"].cut[cut].array * scale_factor )
+
+        print ("N 2tag sideband", sideband_2tag_evts)
         print ("N VBF",  nvbf)
         print ("N ggF",  nggf)
         print ("N 0tag", n0tag)
         print ("S/SQRT(B)", (nvbf+nggf)/sqrt(n0tag))
         print ("S/SQRT(B*(1+0.0001B))", (nvbf+nggf)/sqrt(n0tag*(1+0.0001*n0tag)))
-
         print ("------------------")
 
 
@@ -575,31 +575,114 @@ def DrawPlotsWithCutsForEachSample(var, canvname, xLabel, yLabel, cuts, norm=Fal
         DrawTool.DrawHists(var+"_"+s+"_"+canvname,  [xLabel, yLabel], plots, ["pre-selection"]+cuts)
 
 
-def GenerateFitWorkSpace(data_hist, z_hist, fitname, fit_function, cut):
-    
+def GenerateSignalWS(process = "signal", cut = None):
 
+    xmlfile = open("FitFiles_"+o.channel+"/"+process+"_"+cut+"_"+o.channel+".xml", "a")
+
+    xmlfile.write('''<!DOCTYPE Model SYSTEM 'AnaWSBuilder.dtd'>'''+"\n")
+    xmlfile.write('''    <Model Type="External" Input="config/vbf/FitFiles_{!s}/WS_{!s}_{!s}_{!s}.root" WSName="combined" ModelName="C_{!s}_model" ObservableName="obs_x_C_{!s}">'''.format(o.channel, process, o.channel, cut, cut, cut)+"\n")
+    xmlfile.write('''    <Item Name="unit[1]"/>\n''')
+    xmlfile.write('''    <Rename OldName="Lumi" NewName="unit"/>\n''')
+
+
+    signal_hist = None;
+    if process == "signal":
+        signal_hist = deepcopy(  SAMPLES["VBF"].histograms["mBB_short_"+cut] )
+        signal_hist.Add       (  SAMPLES["ggF"].histograms["mBB_short_"+cut] )
+
+    if process == "z":
+        signal_hist = deepcopy(  SAMPLES["Zbb_QCD"].histograms["mBB_short_"+cut] )
+        signal_hist.Add       (  SAMPLES["Zbb_EWK"].histograms["mBB_short_"+cut] )
+
+    ### generate workspace for signal
+    meas_sig = RooStats.HistFactory.Measurement(process+"_"+o.channel+"_"+cut, process+"_"+o.channel+"_"+cut);
+    meas_sig.SetOutputFilePrefix("WS")
+    meas_sig.SetExportOnly(1);
+    meas_sig.SetPOI("xs");
+    meas_sig.SetLumi(1);
+    meas_sig.SetLumiRelErr(0.01);
+
+    for ibin in range(signal_hist.GetNbinsX()):
+        if  signal_hist.GetBinContent(ibin+1) ==0:
+            signal_hist.SetBinContent(ibin+1, 0.000001)
+            signal_hist.SetBinError(ibin+1,  0.000001)
+
+    R_Channel_cut = RooStats.HistFactory.Channel("C_"+cut);
+    R_Sample_cut = RooStats.HistFactory.Sample("S_"+cut);
+    R_Sample_cut.SetHisto(signal_hist);
+
+    doStat = True
+    doSyst = False
+
+    if doStat:
+        R_Channel_cut.SetStatErrorConfig(0.0, "Poisson");
+        R_Sample_cut.ActivateStatError();
+        
+        for ibin in range(signal_hist.GetNbinsX()):
+            xmlfile.write('''    <ExtSyst ConstrName="gamma_stat_C_{!s}_bin_{!s}_constraint" NPName="gamma_stat_C_{!s}_bin_{!s}" GOName="nom_gamma_stat_C_{!s}_bin_{!s}" />'''.format(cut, ibin, cut, ibin, cut, ibin)+"\n")
+
+    if doSyst:
+        for key in SYSNAMES:
+            
+            xmlfile.write('''    <ExtSyst ConstrName="alpha_ATLAS_{!s}_Constraint" NPName="alpha_{!s}" GOName="nom_alpha_ATLAS_{!s}" />'''.format(key, key, key)+"\n")
+
+            R_Sys = RooStats.HistFactory.HistoSys("ATLAS_"+key)
+
+            signal_hist_sys_up = None
+            if process == "signal":
+                signal_hist_sys_up.deepcopy(SAMPLES["VBF_"+key+"__1up"].histograms["mBB_short_"+cut])
+                signal_hist_sys_up.Add     (SAMPLES["ggF_"+key+"__1up"].histograms["mBB_short_"+cut])
+            if process == "z":
+                signal_hist_sys_up.deepcopy(SAMPLES["Zbb_QCD_"+key+"__1up"].histograms["mBB_short_"+cut])
+                signal_hist_sys_up.Add     (SAMPLES["Zbb_EWK_"+key+"__1up"].histograms["mBB_short_"+cut])
+
+            R_Sys.SetHistoHigh(signal_hist_sys_up)
+
+            if "JER" not in key:
+                signal_hist_sys_dn = None
+                if process == "signal":
+                    signal_hist_sys_dn.deepcopy(SAMPLES["VBF_"+key+"__1dn"].histograms["mBB_short_"+cut])
+                    signal_hist_sys_dn.Add     (SAMPLES["ggF_"+key+"__1dn"].histograms["mBB_short_"+cut])
+                if process == "z":
+                    signal_hist_sys_dn.deepcopy(SAMPLES["Zbb_QCD_"+key+"__1dn"].histograms["mBB_short_"+cut])
+                    signal_hist_sys_dn.Add     (SAMPLES["Zbb_EWK_"+key+"__1dn"].histograms["mBB_short_"+cut])
+
+                R_Sys.SetHistoLow(signal_hist_sys_dn)
+            else:
+                R_Sys.SetHistoLow(CopyHist(signal_hist))
+            R_Sample_cut.AddHistoSys(R_Sys)
+
+    ### Initialize and save work space for signal
+    R_Channel_cut.AddSample(R_Sample_cut);
+    meas_sig.AddChannel(R_Channel_cut)
+    RooStats.HistFactory.MakeModelAndMeasurementFast(meas_sig)
+    os.system("rm WS_c*"+o.channel+"*")
+    os.system("mv WS_*"+o.channel+"* FitFiles_"+o.channel)
+
+    xmlfile.write('''</Model>''')    
+
+
+
+def StandaloneFit(data_hist, z_hist, norm, fitname, fit_function, cut):
+    
     signal_hist = TH1D("signal_"+fitname+"_"+cut, "signal_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
 
     if "spurious" in cut:
-        signal_hist.Add(SAMPLES["VBF"].histograms["mBB_short_"+cut.lstrip("0tag_spurious_")])
-        signal_hist.Add(SAMPLES["ggF"].histograms["mBB_short_"+cut.lstrip("0tag_spurious_")])
-        #signal_hist.Add(SAMPLES["VBF"].histograms["mBB_short"])
-        #signal_hist.Add(SAMPLES["ggF"].histograms["mBB_short"])
-
-    elif "0tag" in cut:
-        signal_hist = None
-
+        signal_hist.Add(SAMPLES["VBF"].histograms["mBB_short_"+cut.lstrip("spurious_")])
+        signal_hist.Add(SAMPLES["ggF"].histograms["mBB_short_"+cut.lstrip("spurious_")])
+        signal_hist.Scale(norm)
+        
     else:
         signal_hist.Add(SAMPLES["VBF"].histograms["mBB_short_"+cut])
         signal_hist.Add(SAMPLES["ggF"].histograms["mBB_short_"+cut])
 
     output.cd()
-    fit_results_txt = open("f_"+fitname+"_"+cut, "a")
+    fit_results_txt = open("FitFiles_"+o.channel+"/f_"+fitname+"_"+cut+"_"+o.channel, "a")
 
     alpha_z = 0
     alpha_sig = 0
 
-    if "0tag" in cut:
+    if "spurious" in cut:
         alpha_z, alpha_sig = bkgfit(data_hist, fit_function, fitname, doFloatZ = False , signal_hist = signal_hist, z_hist = z_hist)
 
     else:
@@ -624,136 +707,37 @@ def GenerateFitWorkSpace(data_hist, z_hist, fitname, fit_function, cut):
         signal_only.Scale(alpha_sig)
         signal_plus_bkg.Scale(alpha_sig)
         signal_plus_bkg.Add(fit_function)
-        signal_plus_bkg.Add(z_hist)
         DrawTool_Diff.DrawHists("Spurious_Fit_"+fitname+"_"+cut, ["M(bb)", "Number of Events"], 
                            [ signal_only, deepcopy(data_hist), deepcopy(signal_plus_bkg)],
                            [ "Spurious", "data", "Spurious fit "+ fitname])
 
-    elif "0tag" in cut:
-        tmp_hist = TH1D("fit_"+fitname+"_"+cut, "fit_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
-        tmp_hist.Add(fit_function)
-        DrawTool_Diff.DrawHists("Bkg_0tag_Fit_"+fitname+"_"+cut, ["M(bb)", "Number of Events"], 
-                                [deepcopy( data_hist  ), deepcopy(tmp_hist)],
-                                [ "data", fitname])
-
-        
     ## Write out hybrid pseudo data && Create Fit Workspace
     ndof = len(mBB_Binning)-len(mBB_sig_Binning)-fit_function.GetNumberFreeParameters()+1
-    if "0tag" in cut:
+    if "spurious" in cut:
         ndof = len(mBB_Binning)-fit_function.GetNumberFreeParameters()+1
         
-    FITRESULTS[cut][fitname] = FitResults(fitname, cut, fit_function, ndof)
+    FITRESULTS[cut][fitname] = FitResults(fitname, cut, o.channel, fit_function, ndof)
 
-    if "0tag" in cut:
+    ##############################################
+    ### make hybrid pseudo data in text files  ###
+    ##############################################
+    if "spurious" in cut:
+        fit_results_txt.write( "B "+str( data_hist.Integral()  )+"\n")
+        out_data_array = np.array([])
+        out_weight_array = np.array([])
+
+        for ibin in range(data_hist.GetNbinsX()):
+            bincenter = data_hist.GetBinCenter(ibin+1)
+            bincontent = data_hist.GetBinContent(ibin+1)
+            out_data_array = np.concatenate( (bincenter*np.ones(int(bincontent)), out_data_array) )
+
+        out_weight_array = np.ones( len(out_data_array))
+
+        np.savetxt("FitFiles_"+o.channel+"/f_pseudo_data_"+o.channel+"_fit_"+fitname+"_"+cut, out_data_array, fmt='%1.6f')
+        np.savetxt("FitFiles_"+o.channel+"/f_pseudo_data_"+o.channel+"_fit_"+fitname+"_weight_"+cut, out_weight_array, fmt='%1.6f')
+
         return
 
-    ### generate workspace for signal
-    meas_sig = RooStats.HistFactory.Measurement("WS"+cut+fitname, "WS"+cut+fitname); 
-    meas_sig.SetOutputFilePrefix("workspace_signal");
-    meas_sig.SetExportOnly(1);
-    meas_sig.SetPOI("xs");
-    meas_sig.SetLumi(1);
-    meas_sig.SetLumiRelErr(0.01);
-
-    for ibin in range(signal_hist.GetNbinsX()):
-        if  signal_hist.GetBinContent(ibin+1) ==0:
-            signal_hist.SetBinContent(ibin+1, 0.000001)
-            signal_hist.SetBinError(ibin+1,  0.000001)
-
-    fit_results_txt.write("S "+str(signal_hist.Integral()  )+"\n")
-
-    R_Channel_cut = RooStats.HistFactory.Channel("C_"+cut);
-    R_Sample_cut = RooStats.HistFactory.Sample("S_"+cut);
-    R_Sample_cut.SetHisto(signal_hist);
-
-    doStat = False
-    doSyst = False
-
-    if doStat:
-        R_Channel_cut.SetStatErrorConfig(0.0, "Poisson");
-        R_Sample_cut.ActivateStatError();
-
-    if doSyst:
-        for key in SYSNAMES:
-            #R_Sys = RooStats.HistFactory.HistoSys("ATLAS_"+key+"_"+cut)
-            R_Sys = RooStats.HistFactory.HistoSys("ATLAS_"+key)
-
-            signal_hist_sys_up = TH1D("signal_"+key+"__1up_"+fitname+"_"+cut, "signal_"+key+"__1up_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
-            signal_hist_sys_up.Add(SAMPLES["VBF_"+key+"__1up"].histograms["mBB_short_"+cut])
-            signal_hist_sys_up.Add(SAMPLES["ggF_"+key+"__1up"].histograms["mBB_short_"+cut])
-            R_Sys.SetHistoHigh(signal_hist_sys_up)
-
-            if "JER" not in key:
-                signal_hist_sys_dn = TH1D("signal_"+key+"__1down_"+fitname+"_"+cut, "signal_"+key+"__1dwon_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
-                signal_hist_sys_dn.Add(SAMPLES["VBF_"+key+"__1down"].histograms["mBB_short_"+cut])
-                signal_hist_sys_dn.Add(SAMPLES["ggF_"+key+"__1down"].histograms["mBB_short_"+cut])
-                R_Sys.SetHistoLow(signal_hist_sys_dn)
-            else:
-                R_Sys.SetHistoLow(CopyHist(signal_hist))
-            R_Sample_cut.AddHistoSys(R_Sys)
-
-    ### Initialize and save work space for signal
-    R_Channel_cut.AddSample(R_Sample_cut);
-    meas_sig.AddChannel(R_Channel_cut)
-    RooStats.HistFactory.MakeModelAndMeasurementFast(meas_sig)
-
-    ### generate workspace for Z
-    meas_z = RooStats.HistFactory.Measurement("WS"+cut+fitname, "WS"+cut+fitname); 
-    meas_z.SetOutputFilePrefix("workspace_z");
-    meas_z.SetExportOnly(1);
-    meas_z.SetPOI("xs");
-    meas_z.SetLumi(1);
-    meas_z.SetLumiRelErr(0.01);
-
-    output.cd()
-    z_hist = TH1D("zbb_"+fitname+"_"+cut, "zbb_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
-    z_hist.Add(SAMPLES["Zbb_EWK"].histograms["mBB_short_"+cut])
-    z_hist.Add(SAMPLES["Zbb_QCD"].histograms["mBB_short_"+cut])
-    SAMPLES["Zbb_EWK"].histograms["mBB_short_"+cut].Write()
-    SAMPLES["Zbb_QCD"].histograms["mBB_short_"+cut].Write()
-    for ibin in range(z_hist.GetNbinsX()):
-        if  z_hist.GetBinContent(ibin+1) ==0:
-            z_hist.SetBinContent(ibin+1, 0.000001)
-            z_hist.SetBinError(ibin+1,  0.000001)
-
-    fit_results_txt.write("Z "+str(z_hist.Integral()  )+"\n")
-
-    R_Channel_Z_cut = RooStats.HistFactory.Channel("C_"+cut);
-    R_Sample_Z_cut = RooStats.HistFactory.Sample("S_"+cut);
-    R_Sample_Z_cut.SetHisto(z_hist);
-
-    if doStat:
-        R_Channel_Z_cut.SetStatErrorConfig(0.0, "Poisson");
-        R_Sample_Z_cut.ActivateStatError();
-
-    if doSyst:
-        for key in SYSNAMES:
-            #R_Z_Sys = RooStats.HistFactory.HistoSys("ATLAS_"+key+"_"+cut)
-            R_Z_Sys = RooStats.HistFactory.HistoSys("ATLAS_"+key)
-
-            z_hist_sys_up = TH1D("zbb_"+key+"__1up_"+fitname+"_"+cut, "zbb_"+key+"__1up_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
-            z_hist_sys_up.Add(SAMPLES["Zbb_EWK_"+key+"__1up"].histograms["mBB_short_"+cut])
-            z_hist_sys_up.Add(SAMPLES["Zbb_QCD_"+key+"__1up"].histograms["mBB_short_"+cut])
-            print "z hist sys", z_hist_sys_up
-            R_Z_Sys.SetHistoHigh(z_hist_sys_up)
-
-            if "JER" not in key:
-                z_hist_sys_dn = TH1D("zbb_"+key+"__1down_"+fitname+"_"+cut, "zbb_"+key+"__1dwon_"+fitname+"_"+cut, len(mBB_Binning)-1, mBB_Binning)
-                z_hist_sys_dn.Add(SAMPLES["Zbb_EWK_"+key+"__1down"].histograms["mBB_short_"+cut])
-                z_hist_sys_dn.Add(SAMPLES["Zbb_QCD_"+key+"__1down"].histograms["mBB_short_"+cut])
-                R_Z_Sys.SetHistoLow(z_hist_sys_dn)
-            else:
-                R_Z_Sys.SetHistoLow(CopyHist(z_hist))
-            R_Sample_Z_cut.AddHistoSys(R_Z_Sys)
-
-    ### Initialize and save work space for Z
-    R_Channel_Z_cut.AddSample(R_Sample_Z_cut);
-    meas_z.AddChannel(R_Channel_Z_cut)
-    RooStats.HistFactory.MakeModelAndMeasurementFast(meas_z)
-    
-    ###
-    ### make hybrid pseudo data in text files
-    ###
     ## predict fit over full regime
     fit_mBB = []
     for ibin in range(len(mBB_Binning)):
@@ -796,43 +780,13 @@ def GenerateFitWorkSpace(data_hist, z_hist, fitname, fit_function, cut):
     out_data_array = out_data_array[out_weight_array>0]
     out_weight_array = out_weight_array[out_weight_array>0]
 
-    np.savetxt("f_pseudo_data_fit_"+fitname+"_"+cut, out_data_array, fmt='%1.6f')
-    np.savetxt("f_pseudo_data_fit_"+fitname+"_weight_"+cut, out_weight_array, fmt='%1.6f')
+    np.savetxt("FitFiles_"+o.channel+"/f_pseudo_data_"+o.channel+"_fit_"+fitname+"_"+cut, out_data_array, fmt='%1.6f')
+    np.savetxt("FitFiles_"+o.channel+"/f_pseudo_data_"+o.channel+"_fit_"+fitname+"_weight_"+cut, out_weight_array, fmt='%1.6f')
 
 
-def GenerateFitWorkSpace2Region(data_hist_1, data_hist_2, z_hist_1, z_hist_2, fitname, fit_function):
-
-    bkgfit_2Region(data_hist_1, data_hist_2, fit_function, fitname, z_hist_1 = z_hist_1, z_hist_2 = z_hist_2)
-    ndof = (len(mBB_Binning)-len(mBB_sig_Binning))*2-fit_function.GetNumberFreeParameters()+1
-
-    FITRESULTS["2region"] = {}
-    FITRESULTS["2region"][fitname] = FitResults(fitname, "2region", fit_function, ndof)
-
-
-def Extrapolate0tag(hist_2tag, hist_0tag, fitname, cut):
-    if fitname == "ratio":
-        ratiohist = CopyHist(hist_2tag)
-        ratiohist.Divide(hist_0tag)
-
-        #for ibin in range(ratiohist.GetNbinsX()):
-        #    ratiohist.SetBinError(ibin+1,1f)
-
-        ratiohist.Fit("pol1")
-        ratiofit = ratiohist.GetFunction("pol1")
-
-        bkg_pred_0tag = CopyHist(hist_0tag)
-        bkg_pred_0tag.Multiply(ratiofit,1.1)
-
-        bkg_pred_0tag.SetName("mBB_pred_ratio_"+cut)
-        SAMPLES["data_2tag"].histograms["pseudo_bkg_ratio_"+cut]= bkg_pred_0tag
-
-        output.cd()
-        ratiohist.Write()
-        #ratiofit.Write()
-        
 
 def FitmBB(cuts, WritePseudoData = False):
-    FITRESULTS["0tag"]= {}
+    #FITRESULTS["0tag"]= {}
 
 #    data_hist_1 = CopyHist(SAMPLES["data_2tag"].histograms["mBB_short_PassBDTCut80-100"])
 #    data_hist_2 = CopyHist(SAMPLES["data_2tag"].histograms["mBB_short_PassBDTCut60-80"])
@@ -846,43 +800,72 @@ def FitmBB(cuts, WritePseudoData = False):
 #    GenerateFitWorkSpace2Region(data_hist_1, data_hist_2, z_hist_1, z_hist_2, "BernsteinO4Lin", BernsteinO4Lin)
 
     for cut in cuts:
-
-        ## fit 0tag corrected data
         print "cut ", cut
-        FITRESULTS["0tag_corrected_"+cut]= {}
-        norm_0tag = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short_fitband"])
-        norm_0tag.Scale(1/norm_0tag.Integral())
+
+        ## fit spurious data
+        FITRESULTS["spurious_"+cut]= {}
+
+        norm_0tag = None
+        if o.spurious == "0tag":
+            norm_0tag = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short_fitband"])
+        if o.spurious == "2tag":
+            norm_0tag = deepcopy(SAMPLES["data_2tag"].histograms["mBB_short_fitband_noblind_PassBDTCut00-03"])
+        if o.spurious == "mix":
+            norm_0tag = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short_fitband"])
+            norm_0tag.Add(SAMPLES["data_2tag"].histograms["mBB_short_fitband_noblind_PassBDTCut00-03"])
+            
+        n_0tag_fitband= norm_0tag.Integral()
+        norm_0tag.Scale(1.0/n_0tag_fitband)
+
         norm_2tag = deepcopy(SAMPLES["data_2tag"].histograms["mBB_short_fitband_"+cut])
-        norm_2tag.Scale(1/norm_2tag.Integral())
+        n_2tag_fitband = norm_2tag.Integral()
+        norm_2tag.Scale(1.0/n_2tag_fitband)
 
         ratio = deepcopy(norm_2tag)
         ratio.Divide(norm_0tag)
         ratio.Fit("pol1")
         linfit = ratio.GetFunction("pol1")
         linfit.Write()
-        data_hist = CopyHist(SAMPLES["data_0tag"].histograms["mBB_short"])
-        data_hist.Multiply(linfit)
-        
-        #GenerateFitWorkSpace( data_hist, None, "BernsteinO2", BernsteinO2, "0tag_corrected_"+cut)
-        #GenerateFitWorkSpace( data_hist, None, "BernsteinO3", BernsteinO3, "0tag_corrected_"+cut)
-        #GenerateFitWorkSpace( data_hist, None, "BernsteinO4", BernsteinO4, "0tag_corrected_"+cut)
-        #GenerateFitWorkSpace( data_hist, None, "BernsteinO5", BernsteinO5, "0tag_corrected_"+cut)
 
-        ## fit 0tag spurious data
-        FITRESULTS["0tag_spurious_"+cut]= {}
-        data_hist = CopyHist(SAMPLES["data_0tag"].histograms["mBB_short"])
+        data_0tag_fitband = None
+        if o.spurious == "0tag":
+            data_0tag_fitband = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short_fitband"])
+        if o.spurious == "2tag":
+            data_0tag_fitband = deepcopy(SAMPLES["data_2tag"].histograms["mBB_short_fitband_noblind_PassBDTCut00-03"])
+        if o.spurious == "mix":
+            data_0tag_fitband = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short_fitband"])
+            data_0tag_fitband.Add(SAMPLES["data_2tag"].histograms["mBB_short_fitband_noblind_PassBDTCut00-03"])
+
+        data_0tag_fitband.Multiply(linfit)
+        n_0tag_fitband_postcor= data_0tag_fitband.Integral()
         
+        data_hist = None
+        if o.spurious == "0tag":
+            data_hist = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short"])
+        if o.spurious == "2tag":
+            data_hist = deepcopy(SAMPLES["data_2tag"].histograms["mBB_short_noblind_PassBDTCut00-03"])
+        if o.spurious == "mix":
+            data_hist = deepcopy(SAMPLES["data_0tag"].histograms["mBB_short"])
+            data_hist.Add(SAMPLES["data_2tag"].histograms["mBB_short_noblind_PassBDTCut00-03"])
+
+        data_hist.Multiply(linfit)
+
+        data_norm = n_0tag_fitband/n_0tag_fitband_postcor ## normalize data to pre-correction
+        mc_norm = n_0tag_fitband/n_2tag_fitband ## normalize mc to acceptance in CR
+        data_hist.Scale(data_norm)
+
         z_hist = CopyHist(SAMPLES["Zbb_QCD_0tag"].histograms["mBB_short"])
         z_hist.Add(SAMPLES["Zbb_EWK_0tag"].histograms["mBB_short"])
 
-        GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO2", BernsteinO2, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO3", BernsteinO3, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO4", BernsteinO4, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO5", BernsteinO5, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "ExpoBernsteinO2", ExpoBernsteinO2, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "ExpoBernsteinO3", ExpoBernsteinO3, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "ExpoBernsteinO4", ExpoBernsteinO4, "0tag_spurious_"+cut)
-        GenerateFitWorkSpace( data_hist, z_hist, "ExpoBernsteinO5", ExpoBernsteinO5, "0tag_spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "BernsteinO2", BernsteinO2, "spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "BernsteinO3", BernsteinO3, "spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "BernsteinO4", BernsteinO4, "spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "BernsteinO5", BernsteinO5, "spurious_"+cut)
+
+        StandaloneFit( data_hist, z_hist, mc_norm, "ExpoBernsteinO2", ExpoBernsteinO2, "spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "ExpoBernsteinO3", ExpoBernsteinO3, "spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "ExpoBernsteinO4", ExpoBernsteinO4, "spurious_"+cut)
+        StandaloneFit( data_hist, z_hist, mc_norm, "ExpoBernsteinO5", ExpoBernsteinO5, "spurious_"+cut)
 
         ### fit 2tag data
         #FITRESULTS[cut]= {}
@@ -890,10 +873,13 @@ def FitmBB(cuts, WritePseudoData = False):
         #z_hist.Add(SAMPLES["Zbb_EWK"].histograms["mBB_short_fitband_"+cut])
         #
         #data_hist = CopyHist(SAMPLES["data_2tag"].histograms["mBB_short_"+cut])
-        #GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO2", BernsteinO2, cut)
-        #GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO3", BernsteinO3, cut)
-        #GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO4", BernsteinO4, cut)
-        #GenerateFitWorkSpace( data_hist, z_hist, "BernsteinO5", BernsteinO5, cut)
+        #StandaloneFit( data_hist, z_hist, "BernsteinO2", BernsteinO2, cut)
+        #StandaloneFit( data_hist, z_hist, "BernsteinO3", BernsteinO3, cut)
+        #StandaloneFit( data_hist, z_hist, "BernsteinO4", BernsteinO4, cut)
+        #StandaloneFit( data_hist, z_hist, "BernsteinO5", BernsteinO5, cut)
+
+        GenerateSignalWS("signal", cut)
+        GenerateSignalWS("z", cut)
 
         output.cd()
 
@@ -904,23 +890,18 @@ wp = o.btag
 btagcuts = ["2b_mv2c10_70", "2b_mv2c10_77", "2b_mv2c10_85", "0b_mv2c10_70", "0b_mv2c10_77", "0b_mv2c10_85"]
 channelcuts_2cen = ["secondB_medium"]
 pTBBcuts = ["pTBB>70", "pTBB>90", "pTBB>110", "pTBB>130", "pTBB>150", "pTBB>170", "pTBB>190", "pTBB>210", "pTBB>230", "pTBB>250", "pTBB>270"]
-#pTBBcuts = ["pTBB>70", "pTBB>150", "pTBB>250"]
 mJJcuts  = ["mJJ>50", "mJJ>100", "mJJ>150", "mJJ>200"]
 sidebandcuts = ["sideband_up", "sideband_low"]
 fitbandcuts = ["fitband_up", "fitband_low", "fitband"]
 BDTcuts  = ["PassBDTCut00", "PassBDTCut20", "PassBDTCut40", "PassBDTCut60", "PassBDTCut80", "PassBDTCut90", "PassBDTCut95"]
 BDTcuts  = ["PassBDTCut00", "PassBDTCut20", "PassBDTCut40", "PassBDTCut60", "PassBDTCut80", "PassBDTCut90", "PassBDTCut20-40", "PassBDTCut40-60", "PassBDTCut60-80", "PassBDTCut80-100"]
-BDTcuts_More = ["PassBDTCut20-40","PassBDTCut40-60","PassBDTCut60-80","PassBDTCut80-100"]
+BDTcuts_More = ["BDTI", "BDTII", "PassBDTCut00-03","PassBDTCut00-05","PassBDTCut00-10","PassBDTCut00-20", "PassBDTCut20-40","PassBDTCut40-60","PassBDTCut60-80","PassBDTCut80-100"]
 BDTcuts = ["PassBDTCut60-80","PassBDTCut80-100"]
-NNcuts   = ["PassNNCut00", "PassNNCut20", "PassNNCut40", "PassNNCut60", "PassNNCut80", "PassNNCut90", "PassNNCut95"]
-NNcuts   = ["PassNNCut00", "PassNNCut20", "PassNNCut40", "PassNNCut60", "PassNNCut80", "PassNNCut90"]
-NNMCcuts = ["PassNNMCCut00", "PassNNMCCut20", "PassNNMCCut40", "PassNNMCCut60", "PassNNMCCut80", "PassNNMCCut90", "PassNNMCCut95"]
-NNMCcuts = ["PassNNMCCut00", "PassNNMCCut20", "PassNNMCCut40", "PassNNMCCut60", "PassNNMCCut80", "PassNNMCCut90"]
+BDTcuts = ["BDTI", "BDTII"]
 
 if o.test :
-    BDTcuts = ["PassBDTCut60-80", "PassBDTCut80-100"]
-    NNcuts = ["PassNNCut00"]
-    NNMcuts = ["PassNNMCut00"]
+    BDTcuts = ["BDTI", "BDTII"]
+
 
 MVAVarList_Check= ["mBB", "pTBB", "mJJ", "pTJJ", "dRBB", "dEtaJJ", "WidthJ1", "WidthJ2", "cosTheta_MVA", "max_J1J2", "eta_J_star", "HT_soft", "HT_MVA", "mindRB1", "mindRB2", "mindRJ1","mindRJ2", "MV2c10B1", "MV2c10B2"]
 MVAVarList_Use= ["mJJ", "pTJJ", "dEtaJJ", "WidthJ1", "WidthJ2", "cosTheta_MVA", "HT_soft", "HT_MVA", "mindRJ1", "mindRJ2", "MV2c10B1", "MV2c10B2"]
@@ -936,6 +917,16 @@ if o.MVAList == "shortandntrk500":
 if o.MVAList == "shortandntrk1000":
     MVAVarList_Use= ["mJJ", "pTJJ", "dEtaJJ", "cosTheta_MVA", "HT_MVA", "mindRJ1", "mindRJ2", "max_J1J2", "eta_J_star", "NTrk1000PVJ1", "NTrk1000PVJ2"]
 
+
+#############################
+####    Main Code       #####
+#############################
+
+
+################################
+#### Initialize and Apply Cut###
+################################
+
 InitSamples()
 
 if o.ApplypTBBCut:
@@ -945,38 +936,44 @@ output = TFile("out_"+ o.channel+"_" + o.ApplypTBBCut*"_pTBBCut" + "_" + o.MVALi
 output.cd()
 
 BlindData()
-ApplyBtag(wp)
+ApplyBtag()
 
 ComputeMVAWeights(MVAVarList_Use)
 CalculateSensitivity(BDTcuts_More)
 #DrawMVAInputComparison(MVAVarList_Use)
 
-Make1DPlots(SAMPLES, "NJets",      "nJets",           "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), NJet_Binning)
-Make1DPlots(SAMPLES, "mBB",        "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetpT_Binning)
-Make1DPlots(SAMPLES, "mBB_no_corr","mBB_no_corr",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetpT_Binning)
-Make1DPlots(SAMPLES, "mBB_short",  "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), mBB_Binning)
-Make1DPlots(SAMPLES, "mBB_short_fitband",  "mBB",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), mBB_Binning, precut = "fitband")
-Make1DPlots(SAMPLES, "mBBsig",     "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), mBB_Binning_sig)
-Make1DPlots(SAMPLES, "mBBsig_no_corr",  "mBB_no_corr","eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), mBB_Binning_sig)
-Make1DPlots(SAMPLES, "pTBB",       "pTBB",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetpT_Binning)
-Make1DPlots(SAMPLES, "mJJ",        "mJJ",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), MJJ_Binning)
-Make1DPlots(SAMPLES, "pTJJ",       "pTJJ",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetpT_Binning)
-#Make1DPlots(SAMPLES, "dRBB",       "dRBB",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "dEtaJJ",     "dEtaJJ",          "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "dEtaBB",     "dEtaBB",          "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "WidthJ1",    "WidthJ1",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetWidth_Binning)
-#Make1DPlots(SAMPLES, "WidthJ2",    "WidthJ2",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetWidth_Binning)
-#Make1DPlots(SAMPLES, "cosTheta_MVA", "cosTheta_MVA",  "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), CosTheta_Binning)
-#Make1DPlots(SAMPLES, "HT_soft",    "HT_soft",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetpT_Binning)
-#Make1DPlots(SAMPLES, "HT_MVA",     "HT_MVA",          "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), JetpT_Binning)
-#Make1DPlots(SAMPLES, "mindRB1",    "mindRB1",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "mindRB2",    "mindRB2",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "mindRJ1",    "mindRJ1",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "mindRJ2",    "mindRJ2",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), dR_Binning)
-#Make1DPlots(SAMPLES, "max_J1J2",   "max_J1J2",        "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), Jeteta_Binning)
-#Make1DPlots(SAMPLES, "eta_J_star", "eta_J_star",      "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), Jeteta_Binning)
-#Make1DPlots(SAMPLES, "MV2c10B1",   "MV2c10B1",        "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), MV2_Binning)
-#Make1DPlots(SAMPLES, "MV2c10B2",   "MV2c10B2",        "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts ), MV2_Binning)
+Make1DPlots(SAMPLES, "NJets",      "nJets",           "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), NJet_Binning)
+Make1DPlots(SAMPLES, "mBB",        "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+Make1DPlots(SAMPLES, "mBB_no_corr","mBB_no_corr",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+Make1DPlots(SAMPLES, "mBB_short",  "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning)
+Make1DPlots(SAMPLES, "mBB_short_fitband",  "mBB",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning, precut = "fitband")
+Make1DPlots(SAMPLES, "mBBsig",     "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning_sig)
+Make1DPlots(SAMPLES, "mBBsig_no_corr",  "mBB_no_corr","eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning_sig)
+Make1DPlots(SAMPLES, "pTBB",       "pTBB",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+Make1DPlots(SAMPLES, "mJJ",        "mJJ",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), MJJ_Binning)
+Make1DPlots(SAMPLES, "pTJJ",       "pTJJ",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+
+Make1DPlots(SAMPLES, "mBB_short_noblind",  "mBB",             "eventWeight_noblind", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning)
+Make1DPlots(SAMPLES, "mBB_short_fitband_noblind",  "mBB",     "eventWeight_noblind", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning, precut = "fitband")
+
+Make1DPlots(SAMPLES, "pTB1",       "pTB1",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+Make1DPlots(SAMPLES, "pTB2",       "pTB2",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+#Make1DPlots(SAMPLES, "dRBB",       "dRBB",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "dEtaJJ",     "dEtaJJ",          "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "dEtaBB",     "dEtaBB",          "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "WidthJ1",    "WidthJ1",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetWidth_Binning)
+#Make1DPlots(SAMPLES, "WidthJ2",    "WidthJ2",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetWidth_Binning)
+#Make1DPlots(SAMPLES, "cosTheta_MVA", "cosTheta_MVA",  "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), CosTheta_Binning)
+#Make1DPlots(SAMPLES, "HT_soft",    "HT_soft",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+#Make1DPlots(SAMPLES, "HT_MVA",     "HT_MVA",          "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
+#Make1DPlots(SAMPLES, "mindRB1",    "mindRB1",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "mindRB2",    "mindRB2",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "mindRJ1",    "mindRJ1",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "mindRJ2",    "mindRJ2",         "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), dR_Binning)
+#Make1DPlots(SAMPLES, "max_J1J2",   "max_J1J2",        "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), Jeteta_Binning)
+#Make1DPlots(SAMPLES, "eta_J_star", "eta_J_star",      "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), Jeteta_Binning)
+#Make1DPlots(SAMPLES, "MV2c10B1",   "MV2c10B1",        "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), MV2_Binning)
+#Make1DPlots(SAMPLES, "MV2c10B2",   "MV2c10B2",        "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), MV2_Binning)
 #Make1DPlots(SAMPLES, "HadronConeExclTruthLabelB1",    "HadronConeExclTruthLabelB1",         "eventWeight", UniqueList(channelcuts_2cen +  pTBBcuts ), PDGID_Binning)
 #Make1DPlots(SAMPLES, "HadronConeExclTruthLabelB2",    "HadronConeExclTruthLabelB2",         "eventWeight", UniqueList(channelcuts_2cen +  pTBBcuts ), PDGID_Binning)
 
@@ -988,10 +985,16 @@ DrawPlotsWithCutsForEachSample("pTBB", "pTBBCuts", "M(bb)",  "Events", pTBBcuts)
 ####  Customized Plots  #####
 #############################
 
+if o.channel== "2cen":
+    Make1DPlots(SAMPLES, "mBB_short",  "mBB",  "eventWeight", ["SecondBNotTrue"], mBB_Binning)
+    
+    DrawTool.DrawHists("mBB_Full_Vs_NotTrueB",  ["M(bb)", "Events"], 
+                       [SAMPLES["VBF"].histograms["mBB_short"], SAMPLES["VBF"].histograms["mBB_short_SecondBNotTrue"]],
+                       ["Full", "Second B Not True"])
+
 DrawTool_Ratio.DrawHists("mBB_0tag_vs_2tag",  ["M(bb)", "Events"], 
                          [SAMPLES["data_0tag"].histograms["mBB_short"], SAMPLES["data_2tag"].histograms["mBB_short" ]],
                          ["data_0tag", "data_2tag"])
-
 
 #### Draw M(bb) w/ and w/o correction
 #DrawTool_Ratio.DrawHists("mBB_corr_vs_nocorr",  ["M(bb)", "Events"], [SAMPLES["VBF"].histograms["mBBsig"],
@@ -1008,20 +1011,27 @@ DrawTool_Ratio.DrawHists("mBB_0tag_vs_2tag",  ["M(bb)", "Events"],
 
 #### Draw M(bb) for 0-tag vs 2-tag with BDT cut
 #### Draw M(bb) for 2-tag BDT cuts comparison
-for icut in range(len(BDTcuts)):
-    cut1 = BDTcuts[icut]
+for icut in range(len(BDTcuts_More)):
+    cut1 = BDTcuts_More[icut]
     DrawTool_Ratio.DrawHists("mBB_0tag_vs_2tag_"+cut1,  ["M(bb)", "Events"], 
                              [SAMPLES["data_0tag"].histograms["mBB_short"], SAMPLES["data_2tag"].histograms["mBB_short_"+cut1 ]], 
                              ["data_0tag", "data_2tag_"+cut1])
 
-    for jcut in range(icut+1, len(BDTcuts)):
-        cut2 = BDTcuts[jcut]
+    DrawTool_Ratio.DrawHists("mBB_2tag_3%BDT_vs_2tag_"+cut1,  ["M(bb)", "Events"], 
+                             [SAMPLES["data_2tag"].histograms["mBB_short_PassBDTCut00-03"], SAMPLES["data_2tag"].histograms["mBB_short_"+cut1 ]], 
+                             ["data_2tag_3%BDT", "data_2tag_"+cut1])
+
+    for jcut in range(icut+1, len(BDTcuts_More)):
+        cut2 = BDTcuts_More[jcut]
+
+        tmp_cut1 = deepcopy(SAMPLES["data_2tag"].histograms["mBB_short_"+cut1])
+        tmp_cut2 = deepcopy(SAMPLES["data_2tag"].histograms["mBB_short_"+cut2])
+        tmp_cut1.Scale( 1./tmp_cut1.Integral())
+        tmp_cut2.Scale( 1./tmp_cut2.Integral())
+
         DrawTool_Ratio.DrawHists("mBB_2tag_"+cut1+"_vs_"+cut2,  ["M(bb)", "Events"], 
-                                 [SAMPLES["data_2tag"].histograms["mBB_short_"+cut2], SAMPLES["data_2tag"].histograms["mBB_short_"+cut1]],
-                                 ["data_2tag_"+cut2, "data_2tag_"+cut1])
-
-sys.exit(0)
-
+                                 [tmp_cut1, tmp_cut2],
+                                 ["data_2tag_"+cut1, "data_2tag_"+cut2])
 
 #########################
 ####  Cut Study  ########
@@ -1048,6 +1058,12 @@ sys.exit(0)
 #DrawPlotsWithCutsForEachSample("mJJ",  "BDTCuts_Normed", "M(JJ)",  "Events", BDTcuts, norm=True)
 #DrawPlotsWithCutsForEachSample("pTBB", "BDTCuts_Normed", "pT(bb)", "Events", BDTcuts, norm=True)
 
+DrawPlotsWithCutsForEachSample("pTB1",  "BDTCuts_Normed", "p_{T} B1",  "Events", BDTcuts, norm=True)
+DrawPlotsWithCutsForEachSample("pTB2",  "BDTCuts_Normed", "p_{T} B2",  "Events", BDTcuts, norm=True)
+
+DrawPlotsWithCutsForEachSample("pTB1",  "BDTCuts", "p_{T} B1",  "Events", BDTcuts, norm=True)
+DrawPlotsWithCutsForEachSample("pTB2",  "BDTCuts", "p_{T} B2",  "Events", BDTcuts, norm=True)
+
 
 #########################
 ####  Fit M(bb)  ########
@@ -1063,9 +1079,9 @@ for cut in  FITRESULTS:
     if cut == "2region":
         continue
 
-    CalFtest( FITRESULTS[cut]["BernsteinO2"], FITRESULTS[cut]["BernsteinO3"] )
-    CalFtest( FITRESULTS[cut]["BernsteinO3"], FITRESULTS[cut]["BernsteinO4"] )
-    CalFtest( FITRESULTS[cut]["BernsteinO4"], FITRESULTS[cut]["BernsteinO5"] )
+    #CalFtest( FITRESULTS[cut]["BernsteinO2"], FITRESULTS[cut]["BernsteinO3"] )
+    #CalFtest( FITRESULTS[cut]["BernsteinO3"], FITRESULTS[cut]["BernsteinO4"] )
+    #CalFtest( FITRESULTS[cut]["BernsteinO4"], FITRESULTS[cut]["BernsteinO5"] )
 
     #CalFtest( FITRESULTS[cut]["ExpoBernsteinO2"], FITRESULTS[cut]["ExpoBernsteinO3"] )
     #CalFtest( FITRESULTS[cut]["ExpoBernsteinO3"], FITRESULTS[cut]["ExpoBernsteinO4"] )

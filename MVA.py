@@ -223,7 +223,7 @@ def buildModel(dataset, multi_class = False):
 def buildBDT(dataset, doTest = False):
 
     max_depth = 1
-    n_estimators = 100
+    n_estimators = 200
     if doTest:
         max_depth = 1
         n_estimators = 20
