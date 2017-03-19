@@ -5,7 +5,7 @@ import array
 from cStringIO import StringIO
 
 fit_start = 80
-fit_end = 300
+fit_end = 200
 fit_range = fit_end-fit_start
 
 ################### Bernstein functions
@@ -32,6 +32,17 @@ def BernsteinO5_raw(x, par):
 
 BernsteinO5 = TF1("BernsteinO5", BernsteinO5_raw, fit_start, fit_end, 6)
 
+
+def BernsteinO6_raw(x, par):
+    return (par[0]*(1-((x[0]-fit_start)/fit_range))**6 + 
+            par[1]*(6*((x[0]-fit_start)/fit_range)**1*(1-((x[0]-fit_start)/fit_range))**5) + 
+            par[2]*(15*((x[0]-fit_start)/fit_range)**2*(1-((x[0]-fit_start)/fit_range))**4) + 
+            par[3]*(20*((x[0]-fit_start)/fit_range)**3*(1-((x[0]-fit_start)/fit_range))**3) + 
+            par[4]*(15*((x[0]-fit_start)/fit_range)**4*(1-((x[0]-fit_start)/fit_range))**2) + 
+            par[5]*(6*((x[0]-fit_start)/fit_range)**5*(1-((x[0]-fit_start)/fit_range))**1) + 
+            par[6]*((x[0]-fit_start)/fit_range)**6)
+
+BernsteinO6 = TF1("BernsteinO6", BernsteinO6_raw, fit_start, fit_end, 7)
 
 
 def BernsteinO2Lin_raw(x, par):
@@ -110,6 +121,12 @@ def Expo3_raw(x, par):
 Expo3 = TF1("Expo3", Expo3_raw, fit_start, fit_end, 6)
 
 
+def LinCustomRange_raw(x, par):
+    return par[0]+par[1]*x[0]
+
+LinCustomRange = TF1("LinCustomRange", LinCustomRange_raw, fit_start, fit_end, 2)
+
+
 ####################### Fitting Utils
 
 def HistToList (hist):
@@ -169,7 +186,9 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
             data = data_x[ibin]
 
             if bkgname == "BernsteinO2":
-                bkg = par[0]*(1-(bincen-fit_start)/fit_range)**2+ 2*par[1]*(1-(bincen-fit_start)/fit_range)*((bincen-fit_start)/fit_range) +  par[2]*((bincen-fit_start)/fit_range)**2
+                bkg = (par[0]*(1-(bincen-fit_start)/fit_range)**2
+                       + 2*par[1]*(1-(bincen-fit_start)/fit_range)*((bincen-fit_start)/fit_range)
+                       + par[2]*((bincen-fit_start)/fit_range)**2)
 
             if bkgname == "BernsteinO3":
                 bkg = par[0]*(1-((bincen-fit_start)/fit_range))**3 + par[1]*(3*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**2) + par[2]*(3*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))) + par[3]*((bincen-fit_start)/fit_range)**3
@@ -179,7 +198,15 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
 
             if bkgname == "BernsteinO5":
                 bkg = par[0]*(1-((bincen-fit_start)/fit_range))**5 + par[1]*(5*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**4) + par[2]*(10*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))**3) + par[3]*(10*((bincen-fit_start)/fit_range)**3*(1-((bincen-fit_start)/fit_range))**2) + par[4]*(5*((bincen-fit_start)/fit_range)**4*(1-((bincen-fit_start)/fit_range))) + par[5]*((bincen-fit_start)/fit_range)**5
-
+            
+            if bkgname ==  "BernsteinO6":
+                bkg= (par[0]*(1-((bincen-fit_start)/fit_range))**6 + 
+                      par[1]*(6*((bincen-fit_start)/fit_range)**1*(1-((bincen-fit_start)/fit_range))**5) + 
+                      par[2]*(15*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))**4) + 
+                      par[3]*(20*((bincen-fit_start)/fit_range)**3*(1-((bincen-fit_start)/fit_range))**3) + 
+                      par[4]*(15*((bincen-fit_start)/fit_range)**4*(1-((bincen-fit_start)/fit_range))**2) + 
+                      par[5]*(6*((bincen-fit_start)/fit_range)**5*(1-((bincen-fit_start)/fit_range))**1) + 
+                      par[6]*((bincen-fit_start)/fit_range)**6)
 
             if bkgname == "ExpoBernsteinO2":
                 try:
@@ -384,7 +411,6 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
     bkgfunction.SetChisquare(fmin_p[0])
 
     return  fitval[partot-1], fitval[partot-2]
-
 
 
 #### main function used to run the minimization scheme

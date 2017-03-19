@@ -1,6 +1,6 @@
 from ROOT import *
 
-file = TFile("cutflow_data_2tag_2cen.root", "r")
+file = TFile("cf_4cen_PreICHEP.root", "r")
 
 presel= file.Get("CutFlow/PreselectionCutFlow")
 

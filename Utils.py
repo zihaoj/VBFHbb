@@ -2,11 +2,11 @@ import rootpy.tree
 from rootpy.io import root_open
 from ROOT import gDirectory, TLorentzVector, TVector3, TH1D, TH2D, TFile, TMath, Math
 from HistoLab import HistoTool, CopyHist, StackHists, GetPlot, ScaleHist, Project2D, CopyHists, project1D, NormHists, AddHistPairs, ResetBins, GetHistMedian, GetHistIQR, GetRatios, GetAveRatios, GetGausMean, CalSysVariation, CalSysDiff
-from FitFunctions import BernsteinO3, BernsteinO4
+from FitFunctions import BernsteinO3, BernsteinO4, fit_start, fit_end, fit_range
 import root_numpy as rnp
 import numpy as np
 from copy import deepcopy
-
+from math import sqrt
 
 def UniqueList(inList):
     out = []
@@ -14,6 +14,14 @@ def UniqueList(inList):
         if i not in out:
             out.append(i)
     return out
+
+def PoisonFluctuate(hist, binstart =None, binend = None):
+    newhist = deepcopy(hist)
+    for ibin in range(hist.GetNbinsX()):
+        bincontent = np.random.poisson(hist.GetBinContent(ibin+1 ))
+        newhist.SetBinContent(ibin+1, bincontent)
+    return newhist
+
 
 def CalWeightedCorrCoeff(x, y, w):
     mu_x = np.average(x, weights= w)
@@ -90,6 +98,155 @@ def cal_jet_min_dR(sample, njet):
     return np.array(newarray)
 
 
+def ScanGetThreshold(prediction, evtweight, cut):
+    order = np.argsort(prediction)
+    weight_sorted = evtweight[order]
+    prediction_sorted = prediction[order]
+
+    weighttot = sum(weight_sorted)
+    weightsum = 0
+    for i in range(len(weight_sorted)):
+        weightsum += weight_sorted[i]
+        if weightsum>cut*weighttot:
+            return prediction_sorted[i]
+
+def FindOptimalBDTCut(mcpred, evtweight, datapred, data0tagpred, data0tagsideband, data0tagsignal, datafraction, nregion):
+    order = np.argsort(mcpred)
+    weight_sorted = evtweight[order]
+    mcpred_sorted = mcpred[order]
+
+    weighttot = sum(weight_sorted)
+    weightsum = 0
+    bottomboundary =0
+
+    #find botoom
+    for i in range(weight_sorted.shape[0]):
+        weightsum += weight_sorted[i]
+        if weightsum>(1-datafraction)*weighttot:
+            bottomboundary = mcpred_sorted[i]
+            weight_sorted = weight_sorted[i:-1]
+            mcpred_sorted = mcpred_sorted[i:-1]
+
+            break
+
+    if nregion ==2:
+        maxSensitivity = 0
+        cut = -100
+        s_over_b_1 = 0
+        s_over_b_2 = 0
+        B1 = 0
+        B2 = 0
+        S1 = 0
+        S2 = 0
+
+        for i in range(weight_sorted.shape[0]):
+            S1 = np.sum(weight_sorted[0:i])
+            B1_2tag  = np.sum( np.logical_and(datapred< mcpred_sorted[i], datapred>bottomboundary))
+            B1_0tag  = np.sum(np.logical_and(np.logical_and(  data0tagpred< mcpred_sorted[i] , data0tagsideband), data0tagpred>bottomboundary) )
+
+            B1  = B1_2tag/float(B1_0tag) * np.sum(np.logical_and( np.logical_and( data0tagpred< mcpred_sorted[i] , data0tagsignal), data0tagpred>bottomboundary))
+            
+            S2 = np.sum(weight_sorted[i:-1])
+
+            B2_2tag = np.sum( datapred> mcpred_sorted[i])
+            B2_0tag  = np.sum(np.logical_and( data0tagpred> mcpred_sorted[i] , data0tagsideband) )
+
+            B2  = B2_2tag/float(B2_0tag) * np.sum(np.logical_and( data0tagpred> mcpred_sorted[i], data0tagsignal) )
+
+            if S1 < 8: #0.1 * np.sum(weight_sorted):
+                continue
+
+            if S2 < 8: #0.1 * np.sum(weight_sorted):
+                continue
+
+            if B1 == float('nan') or B2 == float('nan'):
+                continue
+
+            sensitivity = sqrt( S1**2/(S1+B1) + S2**2/(S2+B2) )
+
+            if sensitivity>maxSensitivity:
+                maxSensitivity = sensitivity
+                cut = mcpred_sorted[i]
+                s_over_b_1 = sqrt(S1**2/(S1+B1))
+                s_over_b_2 = sqrt(S2**2/(S2+B2))
+
+        print "region II", s_over_b_1
+        print "region I", s_over_b_2
+        print bottomboundary, cut
+
+        return [cut, bottomboundary]
+
+    if nregion ==3:
+        maxSensitivity = 0
+        cut = -100
+        s_over_b_1 = 0
+        s_over_b_2 = 0
+        s_over_b_3 = 0
+        B1 = 0
+        B2 = 0
+        B3 = 0
+        S1 = 0
+        S2 = 0
+        S3 = 0
+
+        searchgrid = []
+        step = 100
+        
+        for i in range(step):
+            searchgrid.append( (max(mcpred_sorted)-min(mcpred_sorted))/step*i+ min(mcpred_sorted) )
+
+        for i in range( len(searchgrid) ):
+            score_i = searchgrid[i]
+
+            S1 = np.sum( weight_sorted[ mcpred_sorted<score_i]  )
+            B1_2tag  = np.sum( np.logical_and(datapred< score_i, datapred>bottomboundary))
+            B1_0tag  = np.sum(np.logical_and(np.logical_and(  data0tagpred< score_i , data0tagsideband), data0tagpred>bottomboundary) )
+            B1  = B1_2tag/float(B1_0tag) * np.sum(np.logical_and( np.logical_and( data0tagpred< score_i , data0tagsignal), data0tagpred>bottomboundary))
+
+            for j in range(i+1, len(searchgrid)):
+                score_j = searchgrid[j]
+
+                S2 = np.sum(  weight_sorted[ np.logical_and(mcpred_sorted>score_i, mcpred_sorted<score_j) ] )
+                B2_2tag = np.sum( np.logical_and( datapred> score_i, datapred< score_j))
+                B2_0tag  = np.sum(np.logical_and( np.logical_and( data0tagpred> score_i ,data0tagpred< score_j), data0tagsideband))
+                B2  = B2_2tag/float(B2_0tag) * np.sum(np.logical_and( np.logical_and( data0tagpred> score_i ,data0tagpred< score_j), data0tagsignal))
+
+                S3 = np.sum(weight_sorted[ mcpred_sorted>score_j]  )
+
+                B3_2tag = np.sum(datapred> score_j)
+                B3_0tag  = np.sum(np.logical_and( data0tagpred> score_j, data0tagsideband))
+                B3  = B3_2tag/float(B3_0tag) * np.sum(np.logical_and( data0tagpred> score_j, data0tagsignal))
+
+                if S1 < 0.2 * np.sum(weight_sorted) or S2 < 0.2 * np.sum(weight_sorted) or S3 < 0.2 * np.sum(weight_sorted):
+                    continue
+
+                if B1 < 10 or B2<10 or B3<10:
+                    continue
+
+                if B3_0tag < 20 or B2_0tag < 20 or B1_0tag < 20:
+                    continue
+                
+                if B1 == float('nan') or B2 == float('nan') or B3 == float('nan'):
+                    continue
+
+                sensitivity = sqrt( S1**2/(S1+B1) + S2**2/(S2+B2) + S3**2/(S3+B3) )
+
+                if sensitivity>maxSensitivity:
+                    maxSensitivity = sensitivity
+                    cut1 = score_i
+                    cut2 = score_j
+                    s_over_b_1 = sqrt(S1**2/(S1+B1))
+                    s_over_b_2 = sqrt(S2**2/(S2+B2))
+                    s_over_b_3 = sqrt(S3**2/(S3+B3))
+
+        print "region III", s_over_b_1
+        print "region II", s_over_b_2
+        print "region I", s_over_b_3
+        print bottomboundary, cut1, cut2
+
+        return [cut2, cut1, bottomboundary]
+
+
 class Cut:
     def __init__(self, name, array):
         self.name = name
@@ -99,7 +256,7 @@ class Cut:
         return Cut( self.name+"_"+cut2.name, np.logical_and(self.array, cut2.array) )
 
 
-NoCut = Cut("NoCut", np.array([0]))
+NoCut = Cut("NoCut", np.array([1]))
 
 class PhysicsProcess:
     def __init__(self, name, filename, sysName = ""):
@@ -120,10 +277,14 @@ class PhysicsProcess:
                 self.isSys = True
 
     def Add1DHist(self, histname, bin, cut = NoCut):
-        self.histograms[histname] = TH1D(self.name+"_"+histname +"_" +cut.name, self.name+"_"+histname+"_"+cut.name, len(bin)-1, bin)
+        if cut == NoCut:
+            self.histograms[histname] = TH1D(self.name+"_"+histname , self.name+"_"+histname, len(bin)-1, bin)
+        else:
+            histname = histname +"_"+cut.name
+            self.histograms[histname] = TH1D(self.name+"_"+histname, self.name+"_"+histname, len(bin)-1, bin)
 
     def Add2DHist(self, histname, binx, biny, cut = NoCut):
-        self.histograms[histname] = TH2D(self.name+"_"+histname +"_" +cut.name, self.name+"_"+histname+"_"+cut.name, len(binx), 0, binx[-1], len(biny), 0, biny[-1])
+        self.histograms[histname] = TH2D(self.name+"_"+histname +"_" +cut.name, self.name+"_"+histname+"_"+cut.name, len(binx), binx[0], binx[-1], len(biny), biny[0], biny[-1])
 
     def Norm1DHist(self, histname):
         self.histograms[histname+"_Normed"] = NormHists([self.histograms[histname]])[0]
@@ -132,10 +293,13 @@ class PhysicsProcess:
         if cut == NoCut:
             rnp.fill_hist( self.histograms[histname], array, weight)
         else:
-            rnp.fill_hist( self.histograms[histname], array, weight*cut.array)
+            rnp.fill_hist( self.histograms[histname+"_"+cut.name], array, weight*cut.array)
 
     def AddCut(self, name, array):
         self.cut[name] = Cut(name, array)
+
+    def AddNoCut(self):
+        self.cut["NoCut"] = NoCut
 
     def AddEventVarFromTree(self, varname, test=False):
         stop = None
@@ -143,7 +307,13 @@ class PhysicsProcess:
             stop = 3000000
 
         newarray = rnp.tree2array(self.tree, varname, stop=stop)
-        if "mBB" in varname or "pTBB" in varname or "pTJJ" in varname or "mJJ" in varname or "HT" in varname or "pTB1" in varname or "pTB2" in varname:
+
+        if varname == "pT_ballance":
+            varname = "pT_balance"
+
+        VarInMeV = ["mBB", "pTBB", "pTJJ", "mJJ", "HT_MVA", "HT_soft", "pTB1", "pTB2", "pTJ1", "pTJ2"]
+
+        if varname in VarInMeV:
             self.var[varname] = newarray/1000.
         else:
             self.var[varname] = newarray
@@ -176,6 +346,7 @@ class PhysicsProcess:
             self.var["jet_"+varnames[ivar]+"_"+str(njet)] = newarray
 
 
+
 class FitResults:
     def __init__(self, fitname, region, channel, fitfunction, ndof):
         self.fitname = fitname
@@ -197,9 +368,9 @@ class FitResults:
             self.fitpar.append(self.fit.GetParameter(ipar))
             if self.fit.GetParameter(ipar)>0:
                 self.fitparup.append( 10*self.fit.GetParameter(ipar))
-                self.fitpardn.append( -10*self.fit.GetParameter(ipar))
+                self.fitpardn.append( 0)
             if self.fit.GetParameter(ipar)<0:
-                self.fitparup.append( -10*self.fit.GetParameter(ipar))
+                self.fitparup.append( 0)
                 self.fitpardn.append( 10*self.fit.GetParameter(ipar))
 
     def GetxmlForm(self):
@@ -208,41 +379,40 @@ class FitResults:
         functiontext = ""
         
         if self.fitname == "BernsteinO3":
-            functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3])
+            functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3])
+
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('(@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3))*(@5*@6+@7)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel+self.region, self.channel+self.region)
+
 
         if self.fitname == "BernsteinO4":
-            functiontext = '''<ModelItem Name="EXPR::Bernstein4{!s}('@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+            functiontext = '''<ModelItem Name="EXPR::Bernstein4{!s}('@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+
+
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::Bernstein4{!s}('(@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4))*(@6*@7+@8)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel+self.region, self.channel+self.region)
+
 
         if self.fitname == "BernsteinO5":
-            functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5)', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5])
+            functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5])
 
-        if self.fitname == "ExpoBernsteinO3":
-            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein3{!s}('exp(@1*@0)*(@2*pow((1-@0), 3) + 3*@3*@0*pow((1-@0), 2) + 3*@4*(1-@0)*pow(@0, 2) + @5*pow(@0, 3))', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('(@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5))*(@7*@8+@9)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.channel+self.region, self.channel+self.region)
 
-        if self.fitname == "ExpoBernsteinO4":
-            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein4{!s}('exp(@1*@0)*(@2*pow((1-@0), 4) + 4*@3*@0*pow((1-@0), 3) + 6*@4*pow(@0, 2)*pow((1-@0),2) + 4*@5*(1-@0)*pow(@0, 3) + @6*pow(@0, 4))', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5])
 
-        if self.fitname == "ExpoBernsteinO5":
-            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein5{!s}('exp(@1*@0)*(@2*pow((1-@0), 5) + 5*@3*@0*pow((1-@0), 4) + 10*@4*pow(@0, 2)*pow((1-@0),3) + 10*@5*pow(@0, 3)*pow((1-@0), 2) + 5*@6*(1-@0)*pow(@0, 4) + @7*pow(@0, 5))', x, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}], x17[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.fitpar[6], self.fitpardn[6],self.fitparup[6])
+        if self.fitname == "BernsteinO6":
+            functiontext = '''<ModelItem Name="EXPR::Bernstein6{!s}('(@1*pow((1-@0), 6) + 6*@2*@0*pow((1-@0), 5) + 15*@3*pow(@0, 2)*pow((1-@0),4) + 20*@4*pow(@0, 3)*pow((1-@0), 3) + 15*@5*pow(1-@0, 2)*pow(@0, 4) + 6*@6*pow(@0, 5)*(1-@0) + @7*(pow(@0, 6))', x, x1[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}], x17[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.fitpar[6], self.fitpardn[6],self.fitparup[6])
 
-        if self.fitname == "Expo":
-            functiontext = '''<ModelItem Name="EXPR::EXP{!s}('exp(@1+@0*@2)', :observable:, x11[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1])
-            
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::Bernstein6{!s}('(@1*pow((1-@0), 6) + 6*@2*@0*pow((1-@0), 5) + 15*@3*pow(@0, 2)*pow((1-@0),4) + 20*@4*pow(@0, 3)*pow((1-@0), 3) + 15*@5*pow(1-@0, 2)*pow(@0, 4) + 6*@6*pow(@0, 5)*(1-@0) + @7*(pow(@0, 6))*(@8*@9+@10)', x, x1[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}], x17[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.fitpar[6], self.fitpardn[6],self.fitparup[6], self.region, self.region)
+
         self.xmlform = functiontext
 
         fit_results_xml = open("FitFiles_"+self.channel+"/bkg_"+self.fitname+"_"+self.region+".xml", "a")
 
-        #for ipar in range(self.fit.GetNumberFreeParameters()):
-        #    fit_results_xml.write(str(self.fit.GetParameter(ipar))+"\n")
-
-        #fit_results_xml.write("chi2 "+str(self.chi)+"\n")
-        #fit_results_xml.write("chi2 ndof "+str(self.chindof)+"\n")
-        #fit_results_xml.write("chi2 Prob "+str(self.chinprob)+"\n")
-
-
-        fit_results_xml.write('''<!DOCTYPE Model SYSTEM 'AnaWSBuilder.dtd'>'''+"\n")
-        fit_results_xml.write('''  <Item Name="expr::x('((@0-@2)/@1)', :observable:, range[220.], shift[80.])"/>'''+"\n")
-        fit_results_xml.write('''  <Model Type="UserDef">'''+"\n")
+        fit_results_xml.write('''<!DOCTYPE Model SYSTEM '../AnaWSBuilder.dtd'>'''+"\n")
+        fit_results_xml.write('''<Model Type="UserDef">'''+"\n")
+        fit_results_xml.write('''  <Item Name="expr::x('((@0-@2)/@1)', :observable:, range[{!s}], shift[{!s}])"/>'''.format(fit_range, fit_start)+"\n")
         fit_results_xml.write("  "+self.xmlform+"\n")
         fit_results_xml.write('''</Model>''')
 

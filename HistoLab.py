@@ -379,6 +379,7 @@ class HistoTool:
         self.OutPlotDir = ""
         self.shift = 0.13
         self.doDiff = False
+        self.draw2Dtext = False
 
     def SetPublishableColor(self):
         colors =[(150,45,62),(52,54,66),(151,156,156),(52,136,153),(51,37,50),(100,77,82),(247,122,82),(255,151,79),(164,154,135), (242,235,199)]
@@ -546,6 +547,9 @@ class HistoTool:
                 continue
             doExist = False
 
+            if ("TH2D" in inplots[i].ClassName()):
+                continue
+                
             if ("TH" not in inplots[i].ClassName()):
                 legend.AddEntry(inplots[i], inlabel[i], "LPS")
                 continue
@@ -629,6 +633,7 @@ class HistoTool:
                 labelsize = inplots[i].GetXaxis().GetLabelSize()
                 inplots[i].SetTitle("")
                 inplots[i].GetXaxis().SetLabelSize(0)
+                inplots[i].GetYaxis().SetTitle(axisname[1])
 
                 if  i == len(inplots)-1:
                     if ("TH" not in inplots[i].ClassName()):
@@ -694,7 +699,7 @@ class HistoTool:
                     Ratio.GetXaxis().SetLabelOffset(0.03)
                     Ratio.GetYaxis().SetTitleOffset( Ratio.GetYaxis().GetTitleOffset()*relsize)
                     Ratio.GetYaxis().SetTitle(self.DrawRatio)
-                    Ratio.GetXaxis().SetTitle(XaxisTitle)
+                    Ratio.GetXaxis().SetTitle(axisname[0])
                     Ratio.GetYaxis().SetNdivisions(4)
                     if self.doDiff:
                         Ratio.GetYaxis().SetRangeUser(-0.2, 0.2)
@@ -755,7 +760,10 @@ class HistoTool:
             if inplots[i].ClassName() != "TH2D":
                 inplots[i].Draw(self.drawOption)
             else:
-                inplots[i].Draw() 
+                if self.draw2Dtext:
+                    inplots[i].Draw("colz text") 
+                else:
+                    inplots[i].Draw("colz") 
 
             count +=1
 
@@ -837,7 +845,8 @@ class HistoTool:
                             Ratio.GetXaxis().SetLabelOffset(0.03)
                             Ratio.GetYaxis().SetTitleOffset( Ratio.GetYaxis().GetTitleOffset()*relsize)
                             Ratio.GetYaxis().SetTitle(self.DrawRatio)
-                            Ratio.GetXaxis().SetTitle(XaxisTitle)
+                            #Ratio.GetXaxis().SetTitle(XaxisTitle)
+                            Ratio.GetXaxis().SetTitle(axisname[0])
                             Ratio.GetYaxis().SetRangeUser(0.5, 1.5)
                             Ratio.GetYaxis().SetNdivisions(4)
                             Ratio.SetMarkerColor(1)
@@ -911,7 +920,7 @@ class HistoTool:
         if self.doAtlasLabel:
             Atlas.ATLASLabel(self.AtlasLabelPos, 0.88, self.shift, self.studytype,color=1)
         if self.doLabel and self.lumi != "0":
-            Atlas.myText(self.AtlasLabelPos, 0.81 ,color=1, size=0.04,text="#sqrt{s}="+self.sqrtS + " TeV " + "#intLdt=" + self.lumi + " fb^{-1}") 
+            Atlas.myText(self.AtlasLabelPos, 0.81 ,color=1, size=0.04,text="#sqrt{s}="+self.sqrtS + " TeV, " + self.lumi + " fb^{-1}") 
         if self.doLabel and self.lumi == "0":
             Atlas.myText(self.AtlasLabelPos, 0.81 ,color=1, size=0.04,text="#sqrt{s}="+self.sqrtS + " TeV") 
 
