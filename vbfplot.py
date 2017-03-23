@@ -90,6 +90,7 @@ PDGID_Binning = array('d',range(16))
 NJet_Binning = array('d',range(16))
 NTrk_Binning = array('d',range(25))
 NTrk_Binning_coarse = array('d',range(20))
+NTrkFine_Binning = array('d', [x/100. for x in range(0, 20, 1)])
 JetpT_Binning = array('d',range(0, 400, 2))
 pTJJ_Binning = array('d',range(0, 600, 20))
 pTJJ_Binning_coarse = array('d',range(0, 800, 10))
@@ -116,19 +117,46 @@ empty_mBB_hist = TH1D("empty_mBB_hist", "empty_mBB_hist", len(mBB_Binning)-1, mB
 
 ### define b-tag systematics
 BTAGSYSLIST = []
-BTAGSYSNAMES = ["BTrig_J1_SF", "BTrig_J2_SF", "Eigen_B_0", "Eigen_B_1", "Eigen_B_2", "Eigen_B_3", "Eigen_B_4", 
+BTAGSYSNAMES = ["BTrig_ETA_LeadingJet", "BTrig_J1_SF", "BTrig_J2_SF", 
+                "Eigen_B_0", "Eigen_B_1", "Eigen_B_2", 
                 "Eigen_C_0", "Eigen_C_1", "Eigen_C_3", "Eigen_C_4",
-                "Eigen_Light_0", "Eigen_Light_1", "Eigen_Light_2", "Eigen_Light_3", "Eigen_Light_4", "Eigen_Light_5",
-                "Eigen_Light_6","Eigen_Light_7","Eigen_Light_8","Eigen_Light_9","Eigen_Light_10", "Eigen_Light_11","Eigen_Light_12","Eigen_Light_13", 
+                "Eigen_Light_0", "Eigen_Light_1", "Eigen_Light_2", "Eigen_Light_3", "Eigen_Light_4",
                 "Eigen_Extrapolation", "Eigen_Extrapolation_Charm"]
 
-for sys in BTAGSYSNAMES:
-    BTAGSYSLIST.append(sys+"__1down")
-    BTAGSYSLIST.append(sys+"__1up")
+if o.channel == "4cen":
+    for isys in BTAGSYSNAMES:
+        if BTAGSYSNAMES[isys] != "BTrig_ETA_LeadingJet":
+            if "BTrig" in BTAGSYSNAMES[isys]:
+                BTAGSYSNAMES[isys] = BTAGSYSNAMES[isys] + "_4cen"
+            if "Eigen" in BTAGSYSNAMES[isys]:
+                BTAGSYSNAMES[isys] = BTAGSYSNAMES[isys] + "_77WP"
+
+        BTAGSYSLIST.append(BTAGSYSNAMES[isys] +"__1down")
+        BTAGSYSLIST.append(BTAGSYSNAMES[isys] +"__1up")
+
+if o.channel == "2cen":
+    
+    BTAGSYSNAMES = BTAGSYSNAMES+BTAGSYSNAMES[3:-1]
+
+    for isys in range(len(BTAGSYSNAMES)):
+        if BTAGSYSNAMES[isys] != "BTrig_ETA_LeadingJet":
+            if "BTrig" in BTAGSYSNAMES[isys]:
+                BTAGSYSNAMES[isys] = BTAGSYSNAMES[isys] + "_2cen"
+            elif isys <17:
+                BTAGSYSNAMES[isys] = BTAGSYSNAMES[isys] + "_85WP"
+            else:
+                BTAGSYSNAMES[isys] = BTAGSYSNAMES[isys] + "_70WP"
+        BTAGSYSLIST.append(BTAGSYSNAMES[isys] +"__1down")
+        BTAGSYSLIST.append(BTAGSYSNAMES[isys] +"__1up")
+
+                
 
 BTAGSYSMAP = {}
 for ibsys in range(len(BTAGSYSLIST)):
-    BTAGSYSMAP[ BTAGSYSLIST[ibsys] ] = [ibsys]
+    if o.channel == "4cen":
+        BTAGSYSMAP[ BTAGSYSLIST[ibsys] ] = [ibsys]
+    if o.channel == "2cen":
+        BTAGSYSMAP[ BTAGSYSLIST[ibsys] ] = [ibsys, ibsys+50]
 
 ### define theory systematics
 THSYSLIST = []
@@ -166,7 +194,6 @@ SYSLIST = ["JET_21NP_JET_EffectiveNP_1__1down", "JET_21NP_JET_EffectiveNP_1__1up
            "JET_QG_nchargedPDF__1down",                          "JET_QG_nchargedPDF__1up",
            "PRW_DATASF__1down",                                  "PRW_DATASF__1up"]
 
-
 SYSNAMES = ["JET_21NP_JET_EffectiveNP_1", "JET_21NP_JET_EffectiveNP_2", 
             "JET_21NP_JET_EffectiveNP_3", "JET_21NP_JET_EffectiveNP_4",
             "JET_21NP_JET_EffectiveNP_5", "JET_21NP_JET_EffectiveNP_6",
@@ -181,7 +208,6 @@ SYSNAMES = ["JET_21NP_JET_EffectiveNP_1", "JET_21NP_JET_EffectiveNP_2",
             "JET_QG_trackFakes",                            "JET_QG_nchargedExp",
             "JET_QG_nchargedME",                            "JET_QG_nchargedPDF",
             "PRW_DATASF"]
-
 
 
 SAMPLES = {}
@@ -207,7 +233,6 @@ def CreateWeightSample(sample):
 
         SAMPLES[sample+"_"+BTAGSYSLIST[ibsys]].var["eventWeight"] *=  weightsysarray[:, BTAGSYSMAP[ BTAGSYSLIST[ibsys]][0] ]
         SYSSAMPLES[sample+"_"+BTAGSYSLIST[ibsys]] = SAMPLES[sample+"_"+BTAGSYSLIST[ibsys]]
-
     
     if (sample != "VBF" and sample != "ggF"):
         return 
@@ -216,17 +241,17 @@ def CreateWeightSample(sample):
     SAMPLES[sample+"_TH_alpha_s__1up"] = deepcopy(SAMPLES[sample])
     SAMPLES[sample+"_TH_alpha_s__1up"].name += " TH_alpha_s__1up"
     SAMPLES[sample+"_TH_alpha_s__1up"].isSys = True
-    SAMPLES[sample+"_TH_alpha_s__1up"].var["eventWeight"] *=  SAMPLES[sample].var["TH_alpha_s_up"]
+    SAMPLES[sample+"_TH_alpha_s__1up"].var["eventWeight"] *=  SAMPLES[sample].var["alpha_s_up"]
     SYSSAMPLES[sample+"_TH_alpha_s__1up"] = SAMPLES[sample+"_TH_alpha_s__1up"]
 
     SAMPLES[sample+"_TH_alpha_s__1down"] = deepcopy(SAMPLES[sample])
     SAMPLES[sample+"_TH_alpha_s__1down"].name += " TH_alpha_s__1down"
     SAMPLES[sample+"_TH_alpha_s__1down"].isSys = True
-    SAMPLES[sample+"_TH_alpha_s__1down"].var["eventWeight"] *=  SAMPLES[sample].var["TH_alpha_s_dn"]
+    SAMPLES[sample+"_TH_alpha_s__1down"].var["eventWeight"] *=  SAMPLES[sample].var["alpha_s_dn"]
     SYSSAMPLES[sample+"_TH_alpha_s__1down"] = SAMPLES[sample+"_TH_alpha_s__1down"]
 
-    ## NNPDF30 100NP
-    THEORYSYSTS = ["weight_pdf4lhc", "weight_pdfnnpdf30", "weight_qcd_nnlops_2np", "weight_qcd_WG1"]
+    ## Theory systematics
+    THEORYSYSTS = ["weightspdf4lhc", "weightspdfnnpdf30", "weightsqcdnnlops2np", "weightsqcdwg1"]
     THEORYSYSTS_Up = {}
     THEORYSYSTS_Dn = {}
     
@@ -236,46 +261,45 @@ def CreateWeightSample(sample):
         THEORYSYSTS_Dn[sys] = np.zeros(SAMPLES[sample].var[sys].shape[0])
 
         for ievt in range(SAMPLES[sample].var[sys].shape[0]):
-            THEORYSYSTS_Up[ievt] = np.max( SAMPLES[sample].var[sys][ievt, :] )
-            THEORYSYSTS_Dn[ievt] = np.min( SAMPLES[sample].var[sys][ievt, :] )
+            THEORYSYSTS_Up[ievt] = np.max( SAMPLES[sample].var[sys][ievt] )
+            THEORYSYSTS_Dn[ievt] = np.min( SAMPLES[sample].var[sys][ievt] )
 
 
     SAMPLES[sample+"_TH_QCDScale__1up"] = deepcopy(SAMPLES[sample])
     SAMPLES[sample+"_TH_QCDScale__1up"].name += " TH_QCDScale__1up"
     SAMPLES[sample+"_TH_QCDScale__1up"].isSys = True
     if sample == "VBF":
-        SAMPLES[sample+"_TH_QCDScale__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weight_pdfnnpdf30"]
+        SAMPLES[sample+"_TH_QCDScale__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weightspdfnnpdf30"]
     if sample == "ggF":
-        SAMPLES[sample+"_TH_QCDScale__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weight_pdf4lhc"]
+        SAMPLES[sample+"_TH_QCDScale__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weightspdf4lhc"]
     SYSSAMPLES[sample+"_TH_QCDScale__1up"] = SAMPLES[sample+"_TH_QCDScale__1up"]
 
     SAMPLES[sample+"_TH_QCDScale__1down"] = deepcopy(SAMPLES[sample])
     SAMPLES[sample+"_TH_QCDScale__1down"].name += " TH_QCDScale__1down"
     SAMPLES[sample+"_TH_QCDScale__1down"].isSys = True
     if sample == "VBF":
-        SAMPLES[sample+"_TH_QCDScale__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weight_pdfnnpdf30"]
+        SAMPLES[sample+"_TH_QCDScale__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weightspdfnnpdf30"]
     if sample == "ggF":
-        SAMPLES[sample+"_TH_QCDScale__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weight_pdf4lhc"]
+        SAMPLES[sample+"_TH_QCDScale__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weightspdf4lhc"]
     SYSSAMPLES[sample+"_TH_QCDScale__1down"] = SAMPLES[sample+"_TH_QCDScale__1down"]
 
     SAMPLES[sample+"_TH_PDFVar__1up"] = deepcopy(SAMPLES[sample])
     SAMPLES[sample+"_TH_PDFVar__1up"].name += " TH_PDFVar__1up"
     SAMPLES[sample+"_TH_PDFVar__1up"].isSys = True
     if sample == "VBF":
-        SAMPLES[sample+"_TH_PDFVar__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weight_qcd_WG1"]
+        SAMPLES[sample+"_TH_PDFVar__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weightsqcdwg1"]
     if sample == "ggF":
-        SAMPLES[sample+"_TH_PDFVar__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weight_qcd_nnlops_2np"]
+        SAMPLES[sample+"_TH_PDFVar__1up"].var["eventWeight"] *=  THEORYSYSTS_Up["weightsqcdnnlops2np"]
     SYSSAMPLES[sample+"_TH_PDFVar__1up"] = SAMPLES[sample+"_TH_PDFVar__1up"]
 
     SAMPLES[sample+"_TH_PDFVar__1down"] = deepcopy(SAMPLES[sample])
     SAMPLES[sample+"_TH_PDFVar__1down"].name += " TH_PDFVar__1down"
     SAMPLES[sample+"_TH_PDFVar__1down"].isSys = True
     if sample == "VBF":
-        SAMPLES[sample+"_TH_PDFVar__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weight_qcd_WG1"]
+        SAMPLES[sample+"_TH_PDFVar__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weightsqcdwg1"]
     if sample == "ggF":
-        SAMPLES[sample+"_TH_PDFVar__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weight_qcd_nnlops_2np"]
+        SAMPLES[sample+"_TH_PDFVar__1down"].var["eventWeight"] *=  THEORYSYSTS_Dn["weightsqcdnnlops2np"]
     SYSSAMPLES[sample+"_TH_PDFVar__1down"] = SAMPLES[sample+"_TH_PDFVar__1down"]
-
 
 
 def InitSamples():
@@ -310,12 +334,21 @@ def InitSamples():
                 SYSSAMPLES["Zbb_EWK_"+sys] = PhysicsProcess("EWK Z->bb "+sys, "input/4cen/Zbb_EWK_Reader_03_08_4cen_"+o.btag+".root", systreename)
 
     if o.channel == "2cen":
-        VBF = PhysicsProcess("VBF H->bb", "input/2cen/VBF_Reader_03_17_2cen.root")
-        ggF = PhysicsProcess("ggF H->bb", "input/2cen/ggF_Reader_03_17_2cen.root")
-        Zbb_QCD = PhysicsProcess("QCD Z->bb", "input/2cen/Zbb_QCD_Reader_03_17_2cen.root")
-        Zbb_EWK = PhysicsProcess("EWK Z->bb", "input/2cen/Zbb_EWK_Reader_03_17_2cen.root")
-        data_0tag = PhysicsProcess("data 0tag", "input/2cen/data_2016_Reader_03_17_0tag_2cen.root")
-        data_2tag = PhysicsProcess("data 2tag", "input/2cen/data_2016_Reader_03_17_2tag_2cen.root")
+        VBF = PhysicsProcess("VBF H->bb", "input/2cen/VBF_Reader_03_21_2cen_asym.root")
+        ggF = PhysicsProcess("ggF H->bb", "input/2cen/ggF_Reader_03_21_2cen_asym.root")
+        data_0tag = PhysicsProcess("data 0tag", "input/2cen/data_2016_Reader_03_21_0tag_2cen.root")
+        data_2tag = PhysicsProcess("data 2tag", "input/2cen/data_2016_Reader_03_21_2tag_2cen_asym.root")
+
+        Zbb_QCD = PhysicsProcess("QCD Z->bb", "input/2cen/Zbb_QCD_Reader_03_21_2cen_asym.root")
+        Zbb_EWK = PhysicsProcess("EWK Z->bb", "input/2cen/Zbb_EWK_Reader_03_21_2cen_asym.root")
+
+        #VBF = PhysicsProcess("VBF H->bb", "input/2cen/VBF_Reader_03_17_2cen.root")
+        #ggF = PhysicsProcess("ggF H->bb", "input/2cen/ggF_Reader_03_17_2cen.root")
+        #data_0tag = PhysicsProcess("data 0tag", "input/2cen/data_2016_Reader_03_17_0tag_2cen.root")
+        #data_2tag = PhysicsProcess("data 2tag", "input/2cen/data_2016_Reader_03_17_2tag_2cen.root")
+
+        #data_0tag = PhysicsProcess("data 0tag", "input_backup/data_2016_Reader_01_20_0tag_2cen.root")
+        #data_2tag = PhysicsProcess("data 2tag", "input_backup/data_2016_Reader_02_22_2tag_2cen.root")
 
         if o.postfix == "mbbcorrcheck":
             SAMPLES["VBF_OneMu"] = PhysicsProcess("VBF H->bb Muon Correction", "input/VBF_Reader_01_18_2cen_OneMu.root")
@@ -331,8 +364,9 @@ def InitSamples():
             SAMPLES["Zbb_OneMu"] = PhysicsProcess("QCD Z->bb No Correction", "input/Zbb_QCD_Reader_01_20_2cen_NoCorr.root")
 
         if o.postfix == "NLOComp":
-            SAMPLES["VBF_NLO"] = PhysicsProcess("VBF H->bb NLO", "input/2cen/VBF_Reader_03_17_2cen_Old.root")
-            SAMPLES["ggF_NLO"] = PhysicsProcess("ggF H->bb EF4J", "input/2cen/ggF_Reader_03_17_2cen_Old.root")
+            SAMPLES["VBF_NLO"] = PhysicsProcess("VBF H->bb LO",   "input_backup/VBF_Reader_01_20_2cen.root")
+            SAMPLES["ggF_NLO"] = PhysicsProcess("ggF H->bb EF4J", "input_backup/ggF_Reader_01_20_2cen.root")
+            SAMPLES["data_2tag_old"] = PhysicsProcess("data 2tag dev Jan",   "input_backup/data_2016_Reader_01_20_2tag_2cen.root")
 
         for sys in SYSLIST:
 
@@ -340,10 +374,12 @@ def InitSamples():
             if ("JET_QG_trackEfficiency" in sys or "JET_QG_trackFakes" in sys):
                 systreename = systreename.rstrip("__1up")
 
-            SYSSAMPLES["VBF_"+sys] = PhysicsProcess("VBF H->bb "+sys, "input/2cen/VBF_Reader_03_17_2cen.root", systreename)
-            SYSSAMPLES["ggF_"+sys] = PhysicsProcess("ggF H->bb "+sys, "input/2cen/ggF_Reader_03_17_2cen.root", systreename)
-            SYSSAMPLES["Zbb_QCD_"+sys] = PhysicsProcess("QCD Z->bb "+sys, "input/2cen/Zbb_QCD_Reader_03_17_2cen.root", systreename)
-            SYSSAMPLES["Zbb_EWK_"+sys] = PhysicsProcess("EWK Z->bb "+sys, "input/2cen/Zbb_EWK_Reader_03_17_2cen.root", systreename)
+            SYSSAMPLES["VBF_"+sys] = PhysicsProcess("VBF H->bb "+sys, "input/2cen/VBF_Reader_03_21_2cen_asym.root", systreename)
+            SYSSAMPLES["ggF_"+sys] = PhysicsProcess("ggF H->bb "+sys, "input/2cen/ggF_Reader_03_21_2cen_asym.root", systreename)
+            SYSSAMPLES["Zbb_QCD_"+sys] = PhysicsProcess("QCD Z->bb "+sys, "input/2cen/Zbb_QCD_Reader_03_21_2cen_asym.root", systreename)
+            SYSSAMPLES["Zbb_EWK_"+sys] = PhysicsProcess("EWK Z->bb "+sys, "input/2cen/Zbb_EWK_Reader_03_21_2cen_asym.root", systreename)
+            #SYSSAMPLES["VBF_"+sys] = PhysicsProcess("VBF H->bb "+sys, "input/2cen/VBF_Reader_03_17_2cen.root", systreename)
+            #SYSSAMPLES["ggF_"+sys] = PhysicsProcess("ggF H->bb "+sys, "input/2cen/ggF_Reader_03_17_2cen.root", systreename)
 
 
     SAMPLES["VBF"] = VBF
@@ -370,20 +406,24 @@ def InitSamples():
         
         ### back up event weight used only for control region no blinding
         SAMPLES[s].var["eventWeight_noblind"]= SAMPLES[s].var["eventWeight"]
-
         SAMPLES[s].AddEventVarFromTree("weightSysts", o.test)
 
         if s == "VBF" or s == "ggF":
 
-            SAMPLES[s].AddEventVarFromTree("weight_pdf4lhc", o.test)
-            SAMPLES[s].AddEventVarFromTree("weight_pdfnnpdf30", o.test)
-            SAMPLES[s].AddEventVarFromTree("weight_qcd_nnlops", o.test)
-            SAMPLES[s].AddEventVarFromTree("weight_qcd_nnlops_2np", o.test)
-            SAMPLES[s].AddEventVarFromTree("weight_qcd_WG1", o.test)
-            SAMPLES[s].AddEventVarFromTree("weight_alternative_pdf", o.test)
+            print s
+            SAMPLES[s].AddEventVarFromTree("weightspdf4lhc", o.test)
+            SAMPLES[s].AddEventVarFromTree("weightspdfnnpdf30", o.test)
+            SAMPLES[s].AddEventVarFromTree("weightsqcdnnlops", o.test)
+            SAMPLES[s].AddEventVarFromTree("weightsqcdnnlops2np", o.test)
+            SAMPLES[s].AddEventVarFromTree("weightsqcdwg1", o.test)
+            SAMPLES[s].AddEventVarFromTree("weightsalternativepdf", o.test)
 
         ### Load event variable
         SAMPLES[s].AddEventVarFromTree("nJets", o.test)
+        if "data" in s:
+            SAMPLES[s].var["eventWeight"] = np.ones( SAMPLES[s].var["nJets"].shape[0])
+            SAMPLES[s].var["eventWeight_noblind"] = np.ones( SAMPLES[s].var["nJets"].shape[0])
+
         SAMPLES[s].AddEventVarFromTree("pTJ1", o.test)
         SAMPLES[s].AddEventVarFromTree("pTJ2", o.test)
         SAMPLES[s].AddEventVarFromTree("mBB", o.test)
@@ -401,8 +441,17 @@ def InitSamples():
         SAMPLES[s].AddEventVarFromTree("mindRJ2_Ex", o.test)
         SAMPLES[s].AddEventVarFromTree("pT_ballance", o.test)
 
-        SAMPLES[s].AddEventVarFromTree("alpha_s_up", o.test)
-        SAMPLES[s].AddEventVarFromTree("alpha_s_dn", o.test)
+        SAMPLES[s].AddEventVarFromTree("mJ1B1", o.test)
+        SAMPLES[s].AddEventVarFromTree("mJ1B2", o.test)
+        mJ1B1 = (SAMPLES[s].var["mJ1B1"]-SAMPLES[s].var["mJJ"])
+        mJ1B2 = (SAMPLES[s].var["mJ1B2"]-SAMPLES[s].var["mJJ"])
+
+        deltaMJJ = (mJ1B1>mJ1B2)*mJ1B1 + (mJ1B2>mJ1B1)*mJ1B2
+        SAMPLES[s].var["deltaMJJ"] = deltaMJJ*(deltaMJJ>0)
+
+        if (s== "VBF" or s == "ggF"):
+            SAMPLES[s].AddEventVarFromTree("alpha_s_up", o.test)
+            SAMPLES[s].AddEventVarFromTree("alpha_s_dn", o.test)
 
         SAMPLES[s].var["mindRJ1_Ex"][ SAMPLES[s].var["mindRJ1_Ex"]>10] = -1
         SAMPLES[s].var["mindRJ2_Ex"][ SAMPLES[s].var["mindRJ2_Ex"]>10] = -1
@@ -419,8 +468,19 @@ def InitSamples():
         SAMPLES[s].AddEventVarFromTree("NTrk500PVJ1", o.test)
         SAMPLES[s].AddEventVarFromTree("NTrk500PVJ2", o.test)
 
+        SAMPLES[s].var["NTrk500PVJ1pTNorm"] = SAMPLES[s].var["NTrk500PVJ1"]/ np.sqrt( SAMPLES[s].var["pTJ1"])
+        SAMPLES[s].var["NTrk500PVJ2pTNorm"] = SAMPLES[s].var["NTrk500PVJ2"]/ np.sqrt( SAMPLES[s].var["pTJ2"])
+        
         SAMPLES[s].AddEventVarFromTree("pTB1", o.test)
         SAMPLES[s].AddEventVarFromTree("pTB2", o.test)
+
+        SAMPLES[s].AddEventVarFromTree("whoIsB1", o.test)
+        SAMPLES[s].AddEventVarFromTree("whoIsB2", o.test)
+        SAMPLES[s].AddEventVarFromTree("whoIsJ1", o.test)
+        SAMPLES[s].AddEventVarFromTree("whoIsJ2", o.test)
+
+        print s, "J2 B1 overlap", sum(   SAMPLES[s].var["whoIsJ2"] == SAMPLES[s].var["whoIsB1"] )
+        print s, "J2 B2 overlap", sum(   SAMPLES[s].var["whoIsJ2"] == SAMPLES[s].var["whoIsB2"] )
 
         SAMPLES[s].AddNoCut()
 
@@ -440,7 +500,6 @@ def InitSamples():
         SAMPLES[s].AddCut("pTBB>170", SAMPLES[s].var["pTBB"]>170)
         SAMPLES[s].AddCut("pTBB>190", SAMPLES[s].var["pTBB"]>190)
         SAMPLES[s].AddCut("pTBB>210", SAMPLES[s].var["pTBB"]>210)
-
 
         print ("sample", s)
         print ("0tag", sum(SAMPLES[s].cut["0b_mv2c10_85"].array))
@@ -504,6 +563,9 @@ def ApplypTBBCut():
         SAMPLES[s].var["eventWeight_noblind"] = (SAMPLES[s].var["pTBB"]>pTCut) * SAMPLES[s].var["eventWeight_noblind"]
         SAMPLES[s].var["eventWeight_flat"] = (SAMPLES[s].var["pTBB"]>pTCut) * (SAMPLES[s].var["eventWeight"]>0)
 
+        if "data" in s:
+            print "data ptbb"
+            print SAMPLES[s].var["pTBB"]
 
 def Make1DPlots(samples, histname, var, weight, cuts, binning, precuts=[]):
 
@@ -550,6 +612,8 @@ def DrawMVAInputComparison(varlist, cuts):
 
     cuts = ["_"+x for x in cuts]
     cuts += [""]
+
+    print "varlist used for plots", varlist
     
     for var in varlist:
         for s in SAMPLES:
@@ -575,6 +639,7 @@ def DrawMVAInputComparison(varlist, cuts):
                 SAMPLES[s].Norm1DHist(var+"_sideband_low"+cut)
                 SAMPLES[s].Norm1DHist(var+"_sideband_up"+cut)
 
+        print var
         for cut in cuts:
             DrawTool.DrawHists(var+"_mvacomp"+cut,  [var, "A.U."], [SAMPLES["VBF"].histograms[var+cut+"_Normed"], SAMPLES["data_2tag"].histograms[var+cut+"_Normed"]],
                                ["signal", "background"])
@@ -668,6 +733,21 @@ def DrawMVAInputComparison(varlist, cuts):
                 drawBDTMVAInput2D(s, "mBB", BDT_Binning_fine, JetpT_Binning, "SRIII")
 
 
+def DrawMbbTheoryUncertainty():
+    DrawTool_Ratio.DrawHists("VBF_mBB_alpha_s_up",  ["mBB", "A.U."], [SAMPLES["VBF"].histograms["mBB"], SAMPLES["VBF_TH_alpha_s__1up"].histograms["mBB"]],    ["Nominal", "alpha_s_up"])
+    DrawTool_Ratio.DrawHists("VBF_mBB_alpha_s_dn",  ["mBB", "A.U."], [SAMPLES["VBF"].histograms["mBB"], SAMPLES["VBF_TH_alpha_s__1down"].histograms["mBB"]],    ["Nominal", "alpha_s_dn"])
+    DrawTool_Ratio.DrawHists("VBF_mBB_PDFVar_up",  ["mBB", "A.U."], [SAMPLES["VBF"].histograms["mBB"], SAMPLES["VBF_TH_PDFVar__1up"].histograms["mBB"]],    ["Nominal", "PDFVar_up"])
+    DrawTool_Ratio.DrawHists("VBF_mBB_PDFVar_dn",  ["mBB", "A.U."], [SAMPLES["VBF"].histograms["mBB"], SAMPLES["VBF_TH_PDFVar__1down"].histograms["mBB"]],    ["Nominal", "PDFVar_dn"])
+    DrawTool_Ratio.DrawHists("VBF_mBB_QCDScale_up",  ["mBB", "A.U."], [SAMPLES["VBF"].histograms["mBB"], SAMPLES["VBF_TH_QCDScale__1up"].histograms["mBB"]],    ["Nominal", "QCDScale_up"])
+    DrawTool_Ratio.DrawHists("VBF_mBB_QCDScale_dn",  ["mBB", "A.U."], [SAMPLES["VBF"].histograms["mBB"], SAMPLES["VBF_TH_QCDScale__1down"].histograms["mBB"]],    ["Nominal", "QCDScale_dn"])
+
+    DrawTool_Ratio.DrawHists("ggF_mBB_alpha_s_up",  ["mBB", "A.U."], [SAMPLES["ggF"].histograms["mBB"], SAMPLES["ggF_TH_alpha_s__1up"].histograms["mBB"]],    ["Nominal", "alpha_s_up"])
+    DrawTool_Ratio.DrawHists("ggF_mBB_alpha_s_dn",  ["mBB", "A.U."], [SAMPLES["ggF"].histograms["mBB"], SAMPLES["ggF_TH_alpha_s__1down"].histograms["mBB"]],    ["Nominal", "alpha_s_dn"])
+    DrawTool_Ratio.DrawHists("ggF_mBB_PDFVar_up",  ["mBB", "A.U."], [SAMPLES["ggF"].histograms["mBB"], SAMPLES["ggF_TH_PDFVar__1up"].histograms["mBB"]],    ["Nominal", "PDFVar_up"])
+    DrawTool_Ratio.DrawHists("ggF_mBB_PDFVar_dn",  ["mBB", "A.U."], [SAMPLES["ggF"].histograms["mBB"], SAMPLES["ggF_TH_PDFVar__1down"].histograms["mBB"]],    ["Nominal", "PDFVar_dn"])
+    DrawTool_Ratio.DrawHists("ggF_mBB_QCDScale_up",  ["mBB", "A.U."], [SAMPLES["ggF"].histograms["mBB"], SAMPLES["ggF_TH_QCDScale__1up"].histograms["mBB"]],    ["Nominal", "QCDScale_up"])
+    DrawTool_Ratio.DrawHists("ggF_mBB_QCDScale_dn",  ["mBB", "A.U."], [SAMPLES["ggF"].histograms["mBB"], SAMPLES["ggF_TH_QCDScale__1down"].histograms["mBB"]],    ["Nominal", "QCDScale_dn"])
+
 def DrawMVAInputComparisonDifferentSamples(varlist):
     Make1DPlots(SAMPLES, "nJets",      "nJets",           "eventWeight", ["sideband"], NJet_Binning)
     Make1DPlots(SAMPLES, "mBB",        "mBB",             "eventWeight", ["sideband"], JetpT_Binning)
@@ -681,6 +761,7 @@ def DrawMVAInputComparisonDifferentSamples(varlist):
     Make1DPlots(SAMPLES, "max_J1J2",   "max_J1J2",        "eventWeight", ["sideband"], MaxJeteta_Binning)
     Make1DPlots(SAMPLES, "eta_J_star", "eta_J_star",      "eventWeight", ["sideband"], Jeteta_Binning)
     Make1DPlots(SAMPLES, "pT_balance", "pT_balance",    "eventWeight", ["sideband"], ptballance_Binning)
+    Make1DPlots(SAMPLES, "deltaMJJ", "deltaMJJ",    "eventWeight", ["sideband"], ptballance_Binning)
     Make1DPlots(SAMPLES, "mindRJ1_Ex_Noweight", "mindRJ1_Ex",    "eventWeight_flat", ["sideband"], dR_Binning)
     Make1DPlots(SAMPLES, "mindRJ2_Ex_Noweight", "mindRJ2_Ex",    "eventWeight_flat", ["sideband"], dR_Binning)
 
@@ -699,12 +780,14 @@ def DrawMVAInputComparisonDifferentSamples(varlist):
             DrawTool_Ratio.DrawHists(var+"_ICHEPComp",  [var, "A.U."], [SAMPLES["data_2tag_PreICHEP"].histograms[var+"_sideband_Normed"], SAMPLES["data_2tag_PostICHEP"].histograms[var+"_sideband_Normed"]],    ["Pre-ICHEP", "Post-ICHEP"])
 
         if o.postfix == "NLOComp":
-            DrawTool_Ratio.DrawHists(var+"_sideband_VBFSamples",  [var, "A.U."], [SAMPLES["VBF"].histograms[var+"_sideband_Normed"], SAMPLES["VBF_NLO"].histograms[var+"_sideband_Normed"]], ["VBF NNPDF30", "VBF NLO"])
-            DrawTool_Ratio.DrawHists(var+"_sideband_ggFSamples",  [var, "A.U."], [SAMPLES["ggF"].histograms[var+"_sideband_Normed"], SAMPLES["ggF_NLO"].histograms[var+"_sideband_Normed"]], ["ggF NNLO", "ggF NLO EF4J"])
+            DrawTool_Ratio.DrawHists(var+"_VBFSamples_Normed",  [var, "A.U."], [SAMPLES["VBF"].histograms[var+"_Normed"], SAMPLES["VBF_NLO"].histograms[var+"_Normed"]], ["VBF NNPDF30", "VBF LO"])
+            DrawTool_Ratio.DrawHists(var+"_ggFSamples_Normed",  [var, "A.U."], [SAMPLES["ggF"].histograms[var+"_Normed"], SAMPLES["ggF_NLO"].histograms[var+"_Normed"]], ["ggF NNLO", "ggF NLO EF4J"])
+            DrawTool_Ratio.DrawHists(var+"_dataSamples_Normed",  [var, "A.U."], [SAMPLES["data_2tag"].histograms[var+"_Normed"], SAMPLES["data_2tag_old"].histograms[var+"_Normed"]], ["data Dev Mar", "data Dev Jan"])
 
-            DrawTool_Ratio.DrawHists(var+"_VBFSamples",  [var, "A.U."], [SAMPLES["VBF"].histograms[var+"_Normed"], SAMPLES["VBF_NLO"].histograms[var+"_Normed"]], ["VBF NNPDF30", "VBF NLO"])
-            DrawTool_Ratio.DrawHists(var+"_ggFSamples",  [var, "A.U."], [SAMPLES["ggF"].histograms[var+"_Normed"], SAMPLES["ggF_NLO"].histograms[var+"_Normed"]], ["ggF NNLO", "ggF NLO EF4J"])
-            
+            DrawTool_Ratio.DrawHists(var+"_VBFSamples",  [var, "A.U."], [SAMPLES["VBF"].histograms[var], SAMPLES["VBF_NLO"].histograms[var]], ["VBF NNPDF30", "VBF LO"])
+            DrawTool_Ratio.DrawHists(var+"_ggFSamples",  [var, "A.U."], [SAMPLES["ggF"].histograms[var], SAMPLES["ggF_NLO"].histograms[var]], ["ggF NNLO", "ggF NLO EF4J"])
+            DrawTool_Ratio.DrawHists(var+"_dataSamples",  [var, "A.U."], [SAMPLES["data_2tag"].histograms[var], SAMPLES["data_2tag_old"].histograms[var]], ["data Dev Mar", "data Dev Jan"])
+
     #SAMPLES["VBF"].Norm1DHist("mindRJ1_Ex_Noweight")
     #SAMPLES["VBF"].Norm1DHist("mindRJ2_Ex_Noweight")
     #DrawTool.DrawHists("mindRJ1_Ex_flatweight",  ["mindRJ1_Ex", "A.U."], [SAMPLES["VBF"].histograms["mindRJ1_Ex_Noweight_Normed"], SAMPLES["VBF"].histograms["mindRJ1_Ex_Normed"]],    ["MC W/O Weight", "MC W/ Weight"])
@@ -715,6 +798,8 @@ def ComputeMVAWeights(varlist):
 
     MVAinputs = {}
     MVAinputs_sys = {}
+
+    print "var list used ", varlist
 
     for s in SAMPLES:
         out_arr = SAMPLES[s].var["eventWeight"]
@@ -739,18 +824,22 @@ def ComputeMVAWeights(varlist):
 
     if o.newmodel == "y":
         print "rebuidling BDT"
-        print dataset_BDT["data_2tag_full"].shape
-        
-        model_BDT  = buildBDT(dataset_BDT, o.channel, o.period, o.btag, doTest = o.test)
+
+        if o.postfix == "XValidate":
+            crossValidateBDT(dataset_BDT, o.channel, o.period, o.btag, doTest = o.test)
+        else:
+            model_BDT  = buildBDT(dataset_BDT, o.channel, o.period, o.btag, doTest = o.test)
 
     else:
         filename = "BDT"+o.channel+o.period+o.btag+'.sav'
+
+        #filename = "BDT2cencombinedloose_old.sav"
         if o.MVALeaveOut != "No":
             filename = "BDT"+o.channel+o.period+"_No"+o.MVALeaveOut+'.sav'
         model_BDT = pickle.load(open(filename, 'rb'))
+
     
     PredictModel(model_BDT, "BDT", dataset_BDT, dataset_BDT_sys)
-
     output.cd()
 
     DrawTool.DrawHists("BDTscorePlot", ["BDT score", "A.U."], 
@@ -1021,6 +1110,9 @@ def GenerateSignalWS(process = "signal", cut = None, useFullDistribution = False
                 signal_hist_sys_up=deepcopy(SAMPLES["VBF_"+key+"__1up"].histograms["mBB_short_"+cut])
                 signal_hist_sys_up.Add     (SAMPLES["ggF_"+key+"__1up"].histograms["mBB_short_"+cut])
             if process == "z":
+                if "TH_" in key:
+                    continue
+
                 if useFullDistribution:
                     signal_hist_sys_up=deepcopy(SAMPLES["Zbb_QCD_"+key+"__1up"].histograms["mBB_short"])
                     signal_hist_sys_up.Add     (SAMPLES["Zbb_EWK_"+key+"__1up"].histograms["mBB_short"])
@@ -1380,8 +1472,8 @@ def FitmBB(cuts, WritePseudoData = False):
                 if cut != "CR":
                     zinject_data_hist.Add(signal_hist)
 
-                print "z inject data, signal norm", signal_hist.Integral()
-                print "z inject data, z norm", z_hist_full.Integral()
+                #print "z inject data, signal norm", signal_hist.Integral()
+                #print "z inject data, z norm", z_hist_full.Integral()
 
                 ConvertHistToTxt(zinject_data_hist, "Z_inject_"+str(strength)+"_"+fitname, cut)
 
@@ -1470,15 +1562,16 @@ if o.NBDTReg== "3":
     BDTcuts = ["CR", "SRI", "SRII", "SRIII"]
     BDTcuts_More = ["SRI", "SRII", "SRIII", "CR", "PassBDTCut00-01","PassBDTCut00-015","PassBDTCut00-02", "PassBDTCut00-03","PassBDTCut00-05","PassBDTCut00-10","PassBDTCut00-20", "PassBDTCut20-40","PassBDTCut40-60","PassBDTCut60-80","PassBDTCut80-100"]
 
-MVAVarList_Use= ["mJJ", "pTJJ", "cosTheta_boost","mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ1", "NTrk500PVJ2", "pT_balance"]
+#MVAVarList_Use= ["mJJ", "pTJJ","deltaMJJ", "cosTheta_boost","mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ1", "NTrk500PVJ2", "pT_balance"]
+MVAVarList_Use= ["mJJ", "pTJJ","deltaMJJ", "cosTheta_boost","mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ1", "NTrk500PVJ2", "pT_balance"]
 
-if o.channel == "2cen" and o.postfix != "looseVBF":
-    #MVAVarList_Use= ["mJJ", "pTJJ", "dEtaJJ", "cosTheta_boost","mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ2", "pT_balance"]
-    MVAVarList_Use= ["mJJ", "pTJJ", "cosTheta_boost","mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ2", "pT_balance"]
+if o.channel == "2cen":
+    #MVAVarList_Use= ["mJJ", "pTJJ", "cosTheta_boost", "deltaMJJ", "mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ2", "pT_balance"]
+    MVAVarList_Use= ["mJJ", "pTJJ", "cosTheta_boost", "deltaMJJ", "mindRJ1_Ex", "mindRJ2_Ex", "max_J1J2", "eta_J_star", "NTrk500PVJ2", "pT_balance"]
 
-if o.MVALeaveOut != "No":
-    ind = MVAVarList_Use.index(o.MVALeaveOut)
-    del MVAVarList_Use[ind]
+#if o.MVALeaveOut != "No":
+#    ind = MVAVarList_Use.index(o.MVALeaveOut)
+#    del MVAVarList_Use[ind]
 
 ############################
 ####    Main Code       ####
@@ -1520,10 +1613,11 @@ if o.postfix == "mbbcorrcheck":
     DrawMBBCorr()
     sys.exit(0)
 
+## Theory uncertainties
+
+
 ComputeMVAWeights(MVAVarList_Use)
 
-#Make1DPlots(SAMPLES, "mBB_no_corr","mBB_no_corr",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
-#Make1DPlots(SAMPLES, "mBBsig_no_corr",  "mBB_no_corr","eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), mBB_Binning_sig)
 
 Make1DPlots(SAMPLES, "mBBsig",     "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More + fitbandcuts), mBB_Binning_sig)
 Make1DPlots(SAMPLES, "mBB",        "mBB",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More + fitbandcuts), JetpT_Binning,
@@ -1534,14 +1628,16 @@ Make1DPlots(SAMPLES, "mBB_short_noblind",  "mBB",     "eventWeight_noblind", Uni
             precuts = ["fitband", "signal"])
 
 Make1DPlots(SAMPLES, "NJets",      "nJets",           "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), NJet_Binning)
-Make1DPlots(SAMPLES, "pTJ1",       "pTJ1",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
-Make1DPlots(SAMPLES, "pTJ2",       "pTJ2",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
 #Make1DPlots(SAMPLES, "pTB1",       "pTB1",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
 #Make1DPlots(SAMPLES, "pTB2",       "pTB2",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
 Make1DPlots(SAMPLES, "etaJ1",      "etaJ1",           "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), Eta_Binning)
 Make1DPlots(SAMPLES, "etaJ2",      "etaJ2",           "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), Eta_Binning)
 Make1DPlots(SAMPLES, "pTBB",       "pTBB",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning)
 
+Make1DPlots(SAMPLES, "pTJ1",       "pTJ1",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning,
+            precuts = [ "sideband_up", "sideband_low"])
+Make1DPlots(SAMPLES, "pTJ2",       "pTJ2",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning,
+            precuts = [ "sideband_up", "sideband_low"])
 Make1DPlots(SAMPLES, "mJJ",        "mJJ",             "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), MJJ_Binning,
             precuts = [ "sideband_up", "sideband_low"])
 Make1DPlots(SAMPLES, "pTJJ",       "pTJJ",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), pTJJ_Binning,
@@ -1550,6 +1646,12 @@ Make1DPlots(SAMPLES, "NTrk500PVJ1","NTrk500PVJ1",     "eventWeight", UniqueList(
             precuts = [ "sideband_up", "sideband_low"])
 Make1DPlots(SAMPLES, "NTrk500PVJ2","NTrk500PVJ2",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), NTrk_Binning,
             precuts = [ "sideband_up", "sideband_low"])
+
+Make1DPlots(SAMPLES, "NTrk500PVJ1pTNorm","NTrk500PVJ1pTNorm",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), NTrkFine_Binning,
+            precuts = [ "sideband_up", "sideband_low"])
+Make1DPlots(SAMPLES, "NTrk500PVJ2pTNorm","NTrk500PVJ2pTNorm",     "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), NTrkFine_Binning,
+            precuts = [ "sideband_up", "sideband_low"])
+
 Make1DPlots(SAMPLES, "pTB1",       "pTB1",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning,
             precuts = [ "sideband_up", "sideband_low"])
 Make1DPlots(SAMPLES, "pTB2",       "pTB2",            "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), JetpT_Binning,
@@ -1566,10 +1668,14 @@ Make1DPlots(SAMPLES, "eta_J_star", "eta_J_star",      "eventWeight", UniqueList(
             precuts = [ "sideband_up", "sideband_low"])
 Make1DPlots(SAMPLES, "pT_balance", "pT_balance",    "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), ptballance_Binning,
             precuts = [ "sideband_up", "sideband_low"])
+Make1DPlots(SAMPLES, "deltaMJJ",        "deltaMJJ",    "eventWeight", UniqueList(btagcuts +  pTBBcuts + sidebandcuts  +  BDTcuts_More ), MJJ_Binning,
+            precuts = [ "sideband_up", "sideband_low"])
+
 
 #DrawPlotsWithCutsForEachSample("mBB",  "BDTcuts", "M(bb)",  "Events", BDTcuts_More, dosys = False)
 #DrawPlotsWithCutsForEachSample("pTBB", "pTBBCuts", "M(bb)",  "Events", pTBBcuts, dosys = False)
 
+DrawMbbTheoryUncertainty()
 DrawPlotsWithCutsForEachSample("mBB",  "pTBBCuts", "M(bb)",  "Events", pTBBcuts, dosys = False)
 
 DrawPlotsPreCutMultiSample("NJets", "NoCut",   "NJets",  "A.U.")

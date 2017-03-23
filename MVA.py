@@ -9,6 +9,10 @@ import sklearn.metrics as skmetric
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+#from sklearn.linear_model import LassoCV
+
 
 #from keras.preprocessing import sequence
 #from keras.optimizers import SGD, RMSprop, Adagrad
@@ -39,6 +43,9 @@ def makeData(normalize_input=True, multi_class=False, data_2tag_data=None, data_
 
     data_2tag_data_weight = data_2tag_data[0,:]/float( sum( data_2tag_data[0,:]) ) ## normalize data weight to 1/N Data events
     print "data weight shape", data_2tag_data_weight.shape
+    print "data 2tag sum", sum( data_2tag_data[0,:])
+    print "data 2tag", data_2tag_data
+
     data_2tag_data = np.vstack( (data_2tag_data, np.zeros(data_2tag_data.shape[1])) )
     data_2tag_data_full = data_2tag_data[1:-1, :].transpose()
 
@@ -195,6 +202,31 @@ def buildModel(dataset, multi_class = False):
     return (model, history)
 
 
+def crossValidateBDT(dataset, channel, period, btag, doTest = False):
+
+    kfold = KFold(10)
+    max_depth = 1
+    n_estimators = 300
+    if channel == "2cen":
+        n_estimators = 500
+    if channel == "4cen":
+        n_estimators = 300
+
+    if doTest:
+        max_depth = 1
+        n_estimators = 20
+
+    print ("building bdt for cross validation")
+    X_train = dataset['X_train']
+    y_train = dataset['y_train']
+    weights_train = dataset['weights_train']
+
+    bdt_discrete = AdaBoostClassifier( DecisionTreeClassifier(max_depth=max_depth), n_estimators=n_estimators, algorithm="SAMME.R", learning_rate=0.2)
+
+    print "cross validate"
+    print cross_val_score(bdt_discrete, X_train, y_train, cv=kfold)
+
+
 def buildBDT(dataset, channel, period, btag, doTest = False):
 
     max_depth = 1
@@ -222,6 +254,7 @@ def buildBDT(dataset, channel, period, btag, doTest = False):
 
     print ("finished building bdt")
     return bdt_discrete
+
 
 
 def PredictModel(model, modelname, dataset, sysdataset, multi_class = False):
@@ -259,8 +292,6 @@ def PredictModel(model, modelname, dataset, sysdataset, multi_class = False):
     histdn = 0
 
     if modelname == "BDT":
-        histup = -1
-        histdn = 1
         
         pred_train = model.decision_function( X_train )
         pred_test = model.decision_function( X_test )

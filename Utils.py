@@ -153,22 +153,23 @@ def FindOptimalBDTCut(mcpred, evtweight, datapred, data0tagpred, data0tagsideban
 
             B2  = B2_2tag/float(B2_0tag) * np.sum(np.logical_and( data0tagpred> mcpred_sorted[i], data0tagsignal) )
 
-            if S1 < 8: #0.1 * np.sum(weight_sorted):
+            if S1 < 10: #0.1 * np.sum(weight_sorted):
                 continue
 
-            if S2 < 8: #0.1 * np.sum(weight_sorted):
+            if S2 < 10: #0.1 * np.sum(weight_sorted):
                 continue
 
             if B1 == float('nan') or B2 == float('nan'):
                 continue
+
 
             sensitivity = sqrt( S1**2/(S1+B1) + S2**2/(S2+B2) )
 
             if sensitivity>maxSensitivity:
                 maxSensitivity = sensitivity
                 cut = mcpred_sorted[i]
-                s_over_b_1 = sqrt(S1**2/(S1+B1))
-                s_over_b_2 = sqrt(S2**2/(S2+B2))
+                s_over_b_1 = sqrt(S1**2/(B1+S1))
+                s_over_b_2 = sqrt(S2**2/(B2+S2))
 
         print "region II", s_over_b_1
         print "region I", s_over_b_2
@@ -229,15 +230,15 @@ def FindOptimalBDTCut(mcpred, evtweight, datapred, data0tagpred, data0tagsideban
                 if B1 == float('nan') or B2 == float('nan') or B3 == float('nan'):
                     continue
 
-                sensitivity = sqrt( S1**2/(S1+B1) + S2**2/(S2+B2) + S3**2/(S3+B3) )
+                sensitivity = sqrt( S1**2/(B1+S1) + S2**2/(B2+S2) + S3**2/(B3+S3) )
 
                 if sensitivity>maxSensitivity:
                     maxSensitivity = sensitivity
                     cut1 = score_i
                     cut2 = score_j
-                    s_over_b_1 = sqrt(S1**2/(S1+B1))
-                    s_over_b_2 = sqrt(S2**2/(S2+B2))
-                    s_over_b_3 = sqrt(S3**2/(S3+B3))
+                    s_over_b_1 = sqrt(S1**2/(B1+S1))
+                    s_over_b_2 = sqrt(S2**2/(B2+S2))
+                    s_over_b_3 = sqrt(S3**2/(B3+S3))
 
         print "region III", s_over_b_1
         print "region II", s_over_b_2
@@ -311,7 +312,7 @@ class PhysicsProcess:
         if varname == "pT_ballance":
             varname = "pT_balance"
 
-        VarInMeV = ["mBB", "pTBB", "pTJJ", "mJJ", "HT_MVA", "HT_soft", "pTB1", "pTB2", "pTJ1", "pTJ2"]
+        VarInMeV = ["mBB", "pTBB", "pTJJ", "mJJ", "mJ1B1", "mJ1B2", "deltaMJJ", "HT_MVA", "HT_soft", "pTB1", "pTB2", "pTJ1", "pTJ2"]
 
         if varname in VarInMeV:
             self.var[varname] = newarray/1000.
