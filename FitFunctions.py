@@ -1,12 +1,67 @@
-from ROOT import TF1, TH1D, TFile, gMinuit, Long, Double, TMinuit
+from ROOT import TF1, TH1D, TFile, Long, Double, TMinuit, RooRealVar, RooDataSet, RooGaussian, RooCBShape, RooAddPdf, RooExtendPdf, RooPlot, RooArgSet, RooArgList, TCanvas, RooFit
 import random as rand
 from math import sqrt, exp, log
 import array
 from cStringIO import StringIO
+import root_numpy as rnp
+import numpy as np
 
 fit_start = 80
 fit_end = 200
 fit_range = fit_end-fit_start
+
+################## Crystalball function
+def CrystalBall_raw(x, par):
+    if par[3]<0:
+        return 0
+
+    t = (x[0]-par[2])/par[3];
+    if (par[0] < 0):
+        t = -t
+
+    abs_alpha = abs(par[0])
+
+    if (t >= -abs_alpha):
+        return par[4]*exp(-0.5*t*t)
+
+    else:
+
+        nDivAlpha = par[1]/abs_alpha
+        AA = exp(-0.5*abs_alpha*abs_alpha)
+        B = nDivAlpha-abs_alpha
+        arg = nDivAlpha/(B-t)
+
+        return par[4]*( arg**par[1])
+
+CrystalBall = TF1("CrystalBall", CrystalBall_raw, 40, 150, 5)
+
+
+def CrystalBallGaus_raw(x, par):
+
+    if par[3]<0:
+        return 0
+
+    t = (x[0]-par[2])/par[3];
+    if (par[0] < 0):
+        t = -t
+
+    abs_alpha = abs(par[0])
+
+    if (t >= -abs_alpha):
+        return par[4]*exp(-0.5*t*t  + exp(- (x[0]-par[5])**2/(2*par[6]**2) ))
+
+    else:
+
+        nDivAlpha = par[1]/abs_alpha
+        AA = exp(-0.5*abs_alpha*abs_alpha)
+        B = nDivAlpha-abs_alpha
+        arg = nDivAlpha/(B-t)
+
+        return par[4]*( arg**par[1]  + exp(- (x[0]-par[5])**2/(2*par[6]**2) ))
+
+
+CrystalBallGaus = TF1("CrystalBallGaus", CrystalBallGaus_raw, 40, 150, 7)
+
 
 ################### Bernstein functions
 def BernsteinO2_raw(x, par):
@@ -43,25 +98,6 @@ def BernsteinO6_raw(x, par):
             par[6]*((x[0]-fit_start)/fit_range)**6)
 
 BernsteinO6 = TF1("BernsteinO6", BernsteinO6_raw, fit_start, fit_end, 7)
-
-
-def BernsteinO2Lin_raw(x, par):
-    return (par[0]*(1-(x[0]-fit_start)/fit_range)**2+ 2*par[1]*(1-(x[0]-fit_start)/fit_range)*((x[0]-fit_start)/fit_range) +  par[2]*((x[0]-fit_start)/fit_range)**2)*(par[3]*(x[0]-fit_start)/fit_range+par[4])
-
-BernsteinO2Lin = TF1("BernsteinO2Lin", BernsteinO2Lin_raw, fit_start, fit_end, 5)
-
-
-def BernsteinO3Lin_raw(x, par):
-    return (par[0]*(1-((x[0]-fit_start)/fit_range))**3 + par[1]*(3*((x[0]-fit_start)/fit_range)*(1-((x[0]-fit_start)/fit_range))**2) + par[2]*(3*((x[0]-fit_start)/fit_range)**2*(1-((x[0]-fit_start)/fit_range))) + par[3]*((x[0]-fit_start)/fit_range)**3)*(par[4]*(x[0]-fit_start)/fit_range+par[5])
-
-BernsteinO3Lin = TF1("BernsteinO3Lin", BernsteinO3Lin_raw, fit_start, fit_end, 6)
-
-
-def BernsteinO4Lin_raw(x, par):
-    return (par[0]*(1-((x[0]-fit_start)/fit_range))**4 + par[1]*(4*((x[0]-fit_start)/fit_range)*(1-((x[0]-fit_start)/fit_range))**3) + par[2]*(6*((x[0]-fit_start)/fit_range)**2*(1-((x[0]-fit_start)/fit_range))**2) + par[3]*(4*((x[0]-fit_start)/fit_range)**3*(1-((x[0]-fit_start)/fit_range))) + par[4]*((x[0]-fit_start)/fit_range)**4)*(par[5]*(x[0]-fit_start)/fit_range+par[6])
-
-BernsteinO4Lin = TF1("BernsteinO4Lin", BernsteinO4Lin_raw, fit_start, fit_end, 7)
-
 
 
 ###################### Bernstein * exponentials
@@ -101,24 +137,23 @@ def ExpoBernsteinO5_raw(x, par):
 ExpoBernsteinO5 = TF1("ExpoBernsteinO5", ExpoBernsteinO5_raw, fit_start, fit_end, 7)
 
 
-###################### Sum of Exponentials
-def Expo_raw(x, par):
-    try:
-        return exp(par[0]+par[1]*(x[0]-fit_start)/fit_range)
-    except OverflowError:
-        return -1
+###################### Exponentials of polynomials
+def ExpoPolO2_raw(x, par):
+    return exp( - (par[0] + par[1]* ((x[0]-fit_start)/fit_range) + par[2]* ((x[0]-fit_start)/fit_range)**2 ) )
 
-Expo = TF1("Expo", Expo_raw, fit_start, fit_end, 2)
+ExpoPolO2 = TF1("ExpoPolO2", ExpoPolO2_raw, fit_start, fit_end, 3)
 
-def Expo2_raw(x, par):
-    return (exp(par[0]+par[1]*(x[0]-fit_start)/fit_range) + exp(par[2]+par[3]*(x[0]-fit_start)/fit_range))
 
-Expo2 = TF1("Expo2", Expo2_raw, fit_start, fit_end, 4)
+def ExpoPolO3_raw(x, par):
+    return exp( - (par[0] + par[1]* ((x[0]-fit_start)/fit_range) + par[2]* ((x[0]-fit_start)/fit_range)**2 + par[3]* ((x[0]-fit_start)/fit_range)**3 ) )
 
-def Expo3_raw(x, par):
-    return (exp(par[0]+par[1]*(x[0]-fit_start)/fit_range) + exp(par[2]+par[3]*(x[0]-fit_start)/fit_range) + exp(par[4]+par[5]*(x[0]-fit_start)/fit_range))
+ExpoPolO3 = TF1("ExpoPolO3", ExpoPolO3_raw, fit_start, fit_end, 4)
 
-Expo3 = TF1("Expo3", Expo3_raw, fit_start, fit_end, 6)
+
+def ExpoPolO4_raw(x, par):
+    return exp( - (par[0] + par[1]* ((x[0]-fit_start)/fit_range) + par[2]* ((x[0]-fit_start)/fit_range)**2 + par[3]* ((x[0]-fit_start)/fit_range)**3 + par[4]* ((x[0]-fit_start)/fit_range)**4 ) )
+
+ExpoPolO4 = TF1("ExpoPolO4", ExpoPolO4_raw, fit_start, fit_end, 5)
 
 
 def LinCustomRange_raw(x, par):
@@ -232,19 +267,16 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
                 except OverflowError:
                     bkg = 0
 
-            if bkgname == "Expo2":
-                try:
-                    bkg = exp(par[0]+par[1]*(bincen-fit_start)/fit_range) + exp(par[2]+par[3]*(bincen-fit_start)/fit_range)
-                    #bkg = exp(par[0]+par[1]*bincen) + exp(par[2]+par[3]*bincen)
-                except OverflowError:
-                    bkg = 0
 
-            if bkgname == "Expo3":
-                try:
-                    bkg = exp(par[0]+par[1]*(bincen-fit_start)/fit_range) + exp(par[2]+par[3]*(bincen-fit_start)/fit_range) + exp(par[4]+par[5]*(bincen-fit_start)/fit_range)
-                except OverflowError:
-                    bkg = 0
+            if bkgname == "ExpoPolO2":
+                bkg = exp( - (par[0] + par[1]* ((bincen-fit_start)/fit_range) + par[2]* ((bincen-fit_start)/fit_range)**2 ) )
 
+            if bkgname == "ExpoPolO3":
+                bkg = exp( - (par[0] + par[1]* ((bincen-fit_start)/fit_range) + par[2]* ((bincen-fit_start)/fit_range)**2 + par[3]* ((bincen-fit_start)/fit_range)**3 ) )
+
+            if bkgname == "ExpoPolO4":
+                bkg = exp( - (par[0] + par[1]* ((bincen-fit_start)/fit_range) + par[2]* ((bincen-fit_start)/fit_range)**2 + par[3]* ((bincen-fit_start)/fit_range)**3 + par[4]* ((bincen-fit_start)/fit_range)**4 ) )
+            
 
             mu_x =  bkg
             
@@ -294,35 +326,18 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
     vstart[partot-2] = 0
 
     step = [0.1] * partot
-    upper = [10000000]*partot
+    upper = [100000]*partot
     lower = [0.1]*partot
     varname =[]
 
-    #bkg = exp(par[0]+par[1]*(bincen-fit_start)/fit_range) + exp(par[2]+par[3]*(bincen-fit_start)/fit_range)
+    if "ExpoPol" in bkgname:
+        upper = [1000]*partot
+        lower = [-1000]*partot
 
     if "ExpoBernstein" in bkgname:
-        vstart[0] = -10
+        vstart[0] = -1
         upper[0] = 0
-        lower[0] = -500
-
-    elif "Expo2" in bkgname:
-        vstart[1] = -5
-        vstart[3] = 0
-        upper[1] = 0
-        upper[3] = 10000
-        lower[1] = -10000
-        lower[3] = -10000
-
-    elif "Expo3" in bkgname:
-        vstart[1] = -100
-        vstart[3] = -10
-        vstart[5] = -5
-        upper[1] = 0
-        upper[3] = 500
-        upper[5] = 500
-        lower[1] = -500
-        lower[3] = -500
-        lower[5] = -500
+        lower[0] = -10
 
     for i in range( parfunction):
         varname.append("p"+str(i))
@@ -413,25 +428,33 @@ def bkgfit(data_hist, bkgfunction, bkgname, doFloatZ = False, signal_hist = None
     return  fitval[partot-1], fitval[partot-2]
 
 
+
+def CalChi2(DataHist, function):
+
+    chi2 = 0
+    nbins = 0
+    for i in range(DataHist.GetNbinsX()):
+        databin = DataHist.GetBinContent(i+1)
+        dataerr = DataHist.GetBinError(i+1)
+        fval = function.Eval(DataHist.GetBinCenter(i+1))
+          
+        if dataerr !=0:
+            nbins += 1
+            chi2 += ((fval-databin)/dataerr)**2
+
+            
+    return chi2, nbins
+
 #### main function used to run the minimization scheme
-def bkgfit_2Region(data_hist_1, data_hist_2, bkgfunction, bkgname, z_hist_1 = None, z_hist_2 = None):
-    isBkgPlusZFit = True
-    isSpuriousFit = False
+def signalfit(data_hist, signalfunction, signalname, process):
 
-    binning = HistBinsToList(data_hist_1)
-    data_x_1 = HistToList(data_hist_1)
-    data_error_1 = HistErrorList(data_hist_1)
-    data_x_2 = HistToList(data_hist_2)
-    data_error_2 = HistErrorList(data_hist_2)
+    binning = HistBinsToList(data_hist)
+    data_x = HistToList(data_hist)
+    data_error = HistErrorList(data_hist)
 
-    z_x_1 = []
-    z_x_2 = []
-
-    z_x_1 = HistToList(z_hist_1)
-    z_x_2 = HistToList(z_hist_2)
-
-    parfunction = bkgfunction.GetNumberFreeParameters()
-    partot = bkgfunction.GetNumberFreeParameters()  ## norm and linear
+    parfunction = signalfunction.GetNumberFreeParameters()
+    partot = signalfunction.GetNumberFreeParameters()
+    print partot
 
     ### the fucntion used for TMinuit
     def fcn(npar, gin, f, par, ifag):
@@ -439,45 +462,71 @@ def bkgfit_2Region(data_hist_1, data_hist_2, bkgfunction, bkgname, z_hist_1 = No
     
         # calculate likelihood, input par[0] is the N_B, par[1] is N_C, par[2] is N_L
         for ibin in range(len(binning)):
-            if (data_x_1[ibin] <0.5):
-                continue
-            if (data_x_2[ibin] <0.5):
-                continue
+            #if (data_x[ibin] ==0):
+            #    continue
 
             bincen = binning[ibin]
             
-            bkg = 0
-            data_1 = data_x_1[ibin]
-            data_2 = data_x_2[ibin]
+            mu_x = 0
+            data = data_x[ibin]
+            if data_error[ibin]==0:
+                continue
+            #if data<0.1:
+            #    continue
 
-            if bkgname == "BernsteinO2Lin":
-                bkg_1 = par[0]*(1-(bincen-fit_start)/fit_range)**2+ 2*par[1]*(1-(bincen-fit_start)/fit_range)*((bincen-fit_start)/fit_range) +  par[2]*((bincen-fit_start)/fit_range)**2
-                bkg_2 = bkg_1*(par[3]*bincen+par[4])
+            if signalname == "CrystalBall":
 
-            if bkgname == "BernsteinO3Lin":
-                bkg_1 = par[0]*(1-((bincen-fit_start)/fit_range))**3 + par[1]*(3*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**2) + par[2]*(3*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))) + par[3]*((bincen-fit_start)/fit_range)**3
-                bkg_2 = bkg_1*(par[4]*bincen+par[5])
+                if par[3]<0:
+                    mu_x=0
 
-            if bkgname == "BernsteinO4Lin":
-                bkg_1 = par[0]*(1-((bincen-fit_start)/fit_range))**4 + par[1]*(4*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**3) + par[2]*(6*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))**2) + par[3]*(4*((bincen-fit_start)/fit_range)**3*(1-((bincen-fit_start)/fit_range))) + par[4]*((bincen-fit_start)/fit_range)**4
-                bkg_2 = bkg_1*(par[5]*bincen+par[6])
+                else:
+                    t = (bincen-par[2])/(par[3]);
+                    if (par[0] < 0):
+                        t = -t
 
-            if bkgname == "BernsteinO5":
-                bkg_1 = par[0]*(1-((bincen-fit_start)/fit_range))**5 + par[1]*(5*((bincen-fit_start)/fit_range)*(1-((bincen-fit_start)/fit_range))**4) + par[2]*(10*((bincen-fit_start)/fit_range)**2*(1-((bincen-fit_start)/fit_range))**3) + par[3]*(10*((bincen-fit_start)/fit_range)**3*(1-((bincen-fit_start)/fit_range))**2) + par[4]*(5*((bincen-fit_start)/fit_range)**4*(1-((bincen-fit_start)/fit_range))) + par[5]*((bincen-fit_start)/fit_range)**5 
-                bkg_2 = bkg_1*(par[6]*bincen+par[7])
+                    absAlpha = abs(par[0])
 
+                    if (t >= -absAlpha):
+                        mu_x = par[4]*exp(-0.5*t*t)
 
-            mu_x_1 =  bkg_1
-            mu_x_2 =  bkg_2
+                    else:
 
-            data_1 = data_x_1[ibin]
-            data_2 = data_x_2[ibin]
+                        nDivAlpha = par[1]/absAlpha
+                        AA = exp(-0.5*absAlpha*absAlpha)
+                        B = nDivAlpha-absAlpha
+                        arg = nDivAlpha/(B-t)
 
-            mu_x_1 = mu_x_1 + (z_x_1[ibin])
-            mu_x_2 = mu_x_2 + (z_x_2[ibin])
+                        mu_x = par[4]*(  arg**par[1])
 
-            L = L + ((mu_x_1 - data_1)/data_error_1[ibin])**2 +((mu_x_2 - data_2)/data_error_2[ibin])**2
-                
+            if signalname == "CrystalBallGaus":
+
+                if par[3]<0:
+                    mu_x=0
+
+                else:
+                    t = (bincen-par[2])/(par[3]);
+                    if (par[0] < 0):
+                        t = -t
+
+                    absAlpha = abs(par[0])
+
+                    if (t >= -absAlpha):
+                        mu_x = par[4]*exp(-0.5*t*t + exp(- (bincen-par[5])**2/(2*par[6]**2) ))
+
+                    else:
+
+                        nDivAlpha = par[1]/absAlpha
+                        AA = exp(-0.5*absAlpha*absAlpha)
+                        B = nDivAlpha-absAlpha
+                        arg = nDivAlpha/(B-t)
+
+                        mu_x = par[4]*(  arg**par[1] + exp(- (bincen-par[5])**2/(2*par[6]**2) ))
+
+                            
+            #print mu_x, data, data_error[ibin]
+            #L = L + mu_x - data*log(mu_x)
+            L = L + ((mu_x - data)/data_error[ibin])**2
+            
         f[0] = L
 
     # initialize the TMinuit object
@@ -508,26 +557,64 @@ def bkgfit_2Region(data_hist_1, data_hist_2, bkgfunction, bkgname, z_hist_1 = No
     gMinuit.SetMaxIterations(maxiter)
     
     # initialize fitting the variables
-    vstart = [0.0] * partot
+    vstart = [125.0] * partot
 
     step = [0.1] * partot
     upper = [1000000]*partot
-    lower = [-1000000]*partot
+    lower = [-100]*partot
     varname =[]
 
-    for i in range( partot):
-        varname.append("p"+str(i))
+    lower[3] = 0
+    lower[4] = 0
+    lower[1] = 0
+    vstart[4] =data_hist.Integral()
 
-    varname.append("alpha_sig")
-    varname.append("alpha_z")
+    if process == "signal":
+        vstart[2] = 125
+        lower[2] = 110
+        upper[2] = 140
+
+        vstart[3] = 10
+        lower[3] = 2
+        upper[3] = 25
+
+        if len(vstart)>5:
+            vstart[5] = 125
+            lower[5] = 110
+            upper[5] = 140
+            
+            vstart[6] = 10
+            lower[6] = 5
+            upper[6] = 20
+
+    if process == "z":
+        vstart[2] = 90
+        lower[2] = 70
+        upper[2] = 110
+
+        vstart[3] = 10
+        lower[3] = 2
+        upper[3] = 30
+
+        if len(vstart)>5:
+            vstart[5] = 90
+            lower[5] = 70
+            upper[5] = 110
+            
+            vstart[6] = 10
+            lower[6] = 2
+            upper[6] = 30
+
+
+    for i in range( parfunction):
+        varname.append("p"+str(i))
 
     for i in range(partot):
         gMinuit.mnparm(i, varname[i], vstart[i], step[i], lower[i], upper[i], ierflag)
-
     
     # fitting procedure
     migradstat = gMinuit.Command('MIGrad ' + str(maxiter) + ' ' + str(0.001))
-    improvestat = gMinuit.Command('IMProve ' + str(maxiter) + ' ' + str(0.01))
+    #improvestat = gMinuit.Command('IMProve ' + str(maxiter) + ' ' + str(0.01))
 
     for i in range(partot):
         arglist_p.append(i+1)
@@ -570,11 +657,64 @@ def bkgfit_2Region(data_hist_1, data_hist_2, bkgfunction, bkgname, z_hist_1 = No
 
     gMinuit.mnstat(fmin_p[0], fedm_p[0], errdef_p[0], npari_p, nparx_p, istat_p)
                         
-    for p in range(bkgfunction.GetNumberFreeParameters()):
-        bkgfunction.SetParameter(p, fitval[p])
+    for p in range(signalfunction.GetNumberFreeParameters()):
+        signalfunction.SetParameter(p, fitval[p])
+        print "fit uncert",  fiterr_p[p]
 
-    bkgfunction.SetChisquare(fmin_p[0])
+    signalfunction.SetChisquare(fmin_p[0])
+    print fmin_p[0]
+    return  fitval[partot-1], fitval[partot-2]
 
-    for i in range(partot):
-        varname[i], fitval[i]
-    print "2 regions chi^2", fmin_p[0]
+
+
+def RooFitSig(mbbarray, bdtarray, weightarray, TC_mass, binstart, binend):
+
+    fitstart = 40
+    fitend = 150
+
+    mbbarray = range(200)
+    bdtarray =  range(200)
+    weightarray = range(200)
+
+    mass = RooRealVar("X","m(bb)[GeV]",fitstart, fitend)
+    BDT = RooRealVar("BDT","BDT",-1,100)
+    weight = RooRealVar("weight","weight",-100,200)
+
+    branchnames = ["X", "BDT", "weight"]
+
+    dtype = np.dtype([ (branchnames[idx], np.float64) for idx in range(len(branchnames))])
+    treearray = np.array([ (mbbarray[idx], bdtarray[idx], weightarray[idx]) for idx in range(len(mbbarray))], dtype)
+
+    tree = rnp.array2tree(treearray)
+    
+    m0= RooRealVar("m0", "m0", TC_mass*1., TC_mass*1.-60., TC_mass*1.+60.)
+    m02 = RooRealVar("m02", "m02", TC_mass*1., TC_mass*1.-60., TC_mass*1.+60.)
+    alpha = RooRealVar("alpha", "alpha", 1.295, 1.0, 1.6)
+    sigma2 = RooRealVar("sigma2", "sigma2", 35, 8., 100)
+    n = RooRealVar("n", "n", 5,1,35)
+    
+    mean = RooRealVar("mean","mean of gaussian",750,0,6000)
+    sigma = RooRealVar("sigma","width of gaussian",90,38,300)
+
+    gauss= RooGaussian("gauss","gaussian PDF",mass,m0,sigma)   
+    gauss2 =RooGaussian("gauss2","gaussian PDF",mass,m02,sigma2)   
+    CBshape = RooCBShape("CBshape", "Crystal Ball PDF", mass, m0, sigma2, alpha, n)
+
+    ##PDF normalization
+    num1 = RooRealVar("num1","number of events",400,0,5000) 
+
+    ##relative weight of 2 PDFs
+    f = RooRealVar("f", "f", 0.95, 0.6, 1); 
+
+    sigPdf = RooAddPdf("sigPdf", "Signal PDF", RooArgList(CBshape, gauss), RooArgList(f))
+    extPdf = RooExtendPdf("extPdf", "extPdf", sigPdf, num1)
+    data =  RooDataSet("data", "data", tree, RooArgSet(mass,BDT,weight), "BDT>0","weight");
+
+    xframe = mass.frame()
+    mass.setBins(20)
+    data.plotOn(xframe) 
+    extPdf.plotOn(xframe)#,Normalization(1.0,RooAbsReal.RelativeExpected),LineColor(1))
+
+    hist = extPdf.createHistogram("X", fitend-fitstart)
+    hist.SetAxisRange(binstart, binend)
+    return deepcopy(hist)

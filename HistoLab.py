@@ -366,9 +366,10 @@ class HistoTool:
         self.doLogZ = doLogZ
         self.texts = []
         self.legend = [0.7, 0.75, 0.93, 0.93]
-        self.colorlist = [2, 4, 8, 28, 51, 93, 30, 38, 41, 42, 46]
-        self.colorlist = colorind#self.SetPublishableColor()
-        self.origcolorlist = colorind#self.SetPublishableColor()
+        #self.colorlist = [2, 4, 8, 28, 51, 93, 30, 38, 41, 42, 46]
+        self.colorlist = colorind
+        self.origcolorlist = colorind
+        self.colorlistseq = range(500)
         self.drawOption = ""
         self.FillStyle = 3008
         self.CompareData = False

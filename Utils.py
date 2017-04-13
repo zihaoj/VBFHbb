@@ -305,7 +305,7 @@ class PhysicsProcess:
     def AddEventVarFromTree(self, varname, test=False):
         stop = None
         if test:
-            stop = 3000000
+            stop = 300000
 
         newarray = rnp.tree2array(self.tree, varname, stop=stop)
 
@@ -349,7 +349,7 @@ class PhysicsProcess:
 
 
 class FitResults:
-    def __init__(self, fitname, region, channel, fitfunction, ndof):
+    def __init__(self, fitname, region, channel, fitfunction, ndof, period):
         self.fitname = fitname
         self.region = region
         self.channel = channel
@@ -363,6 +363,7 @@ class FitResults:
         self.fitpar = []
         self.fitparup = []
         self.fitpardn = []
+        self.period = period
 
     def GetFitPar(self):
         for ipar in range(self.fit.GetNumberFreeParameters()):
@@ -383,7 +384,7 @@ class FitResults:
             functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3])
 
             if "SR" in self.region:
-                functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('(@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3))*(@5*@6+@7)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel+self.region, self.channel+self.region)
+                functiontext = '''<ModelItem Name="EXPR::Bernstein3{!s}('(@1*pow((1-@0), 3) + 3*@2*@0*pow((1-@0), 2) + 3*@3*(1-@0)*pow(@0, 2) + @4*pow(@0, 3))*(@5*@6+1)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.01, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel+self.region, self.channel+self.region)
 
 
         if self.fitname == "BernsteinO4":
@@ -391,25 +392,60 @@ class FitResults:
 
 
             if "SR" in self.region:
-                functiontext = '''<ModelItem Name="EXPR::Bernstein4{!s}('(@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4))*(@6*@7+@8)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel+self.region, self.channel+self.region)
+                functiontext = '''<ModelItem Name="EXPR::Bernstein4{!s}('(@1*pow((1-@0), 4) + 4*@2*@0*pow((1-@0), 3) + 6*@3*pow(@0, 2)*pow((1-@0),2) + 4*@4*(1-@0)*pow(@0, 3) + @5*pow(@0, 4))*(@6*@7+1)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.01, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel+self.region, self.channel+self.region)
 
 
         if self.fitname == "BernsteinO5":
             functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5])
 
             if "SR" in self.region:
-                functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('(@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5))*(@7*@8+@9)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.channel+self.region, self.channel+self.region)
+                functiontext = '''<ModelItem Name="EXPR::Bernstein5{!s}('(@1*pow((1-@0), 5) + 5*@2*@0*pow((1-@0), 4) + 10*@3*pow(@0, 2)*pow((1-@0),3) + 10*@4*pow(@0, 3)*pow((1-@0), 2) + 5*@5*(1-@0)*pow(@0, 4) + @6*pow(@0, 5))*(@7*@8+1)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.01, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.channel+self.region, self.channel+self.region)
 
 
-        if self.fitname == "BernsteinO6":
-            functiontext = '''<ModelItem Name="EXPR::Bernstein6{!s}('(@1*pow((1-@0), 6) + 6*@2*@0*pow((1-@0), 5) + 15*@3*pow(@0, 2)*pow((1-@0),4) + 20*@4*pow(@0, 3)*pow((1-@0), 3) + 15*@5*pow(1-@0, 2)*pow(@0, 4) + 6*@6*pow(@0, 5)*(1-@0) + @7*(pow(@0, 6))', x, x1[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}], x17[{!s}, {!s},{!s}])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.fitpar[6], self.fitpardn[6],self.fitparup[6])
+        if self.fitname == "ExpoBernsteinO2":
+            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein2{!s}('exp(@1*@0)*( @2*pow((1-@0), 2) + 2*@3*@0*(1-@0) + @4*(pow(@0, 2)) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3])
 
             if "SR" in self.region:
-                functiontext = '''<ModelItem Name="EXPR::Bernstein6{!s}('(@1*pow((1-@0), 6) + 6*@2*@0*pow((1-@0), 5) + 15*@3*pow(@0, 2)*pow((1-@0),4) + 20*@4*pow(@0, 3)*pow((1-@0), 3) + 15*@5*pow(1-@0, 2)*pow(@0, 4) + 6*@6*pow(@0, 5)*(1-@0) + @7*(pow(@0, 6))*(@8*@9+@10)', x, x1[{!s}, {!s}, {!s}], x12[{!s}, {!s}, {!s}], x13[{!s}, {!s}, {!s}], x14[{!s}, {!s}, {!s}], x15[{!s}, {!s},{!s}], x16[{!s}, {!s},{!s}], x17[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.2, 1], Lin1{!s}[1.1, 0, 3])"/>'''.format(self.region, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.fitpar[6], self.fitpardn[6],self.fitparup[6], self.region, self.region)
+                functiontext = '''<ModelItem Name="EXPR::ExpoBernstein2{!s}('exp(@1*@0)*( @2*pow((1-@0), 2) + 2*@3*@0*(1-@0) + @4*(pow(@0, 2)))(@5*@6+1)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.01, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel+self.region)
+
+
+        if self.fitname == "ExpoBernsteinO3":
+            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein3{!s}('exp(@1*@0)*(@2*pow((1-@0), 3) + 3*@3*@0*pow((1-@0), 2) + 3*@4*(1-@0)*pow(@0, 2) + @5*pow(@0, 3))', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+            
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::ExpoBernstein3{!s}('exp(@1*@0)*(@2*pow((1-@0), 3) + 3*@3*@0*pow((1-@0), 2) + 3*@4*(1-@0)*pow(@0, 2) + @5*pow(@0, 3))*(@6*@7+1)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.1, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel+self.region)
+
+
+        if self.fitname == "ExpoBernsteinO4":
+            functiontext = '''<ModelItem Name="EXPR::ExpoBernstein4{!s}('exp(@1*@0)*(@2*pow((1-@0), 4) + 4*@3*@0*pow((1-@0), 3) + 6*@4*pow(@0, 2)*pow((1-@0),2) + 4*@5*(1-@0)*pow(@0, 3) + @6*pow(@0, 4))', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5])
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::ExpoBernstein4{!s}('exp(@1*@0)*(@2*pow((1-@0), 4) + 4*@3*@0*pow((1-@0), 3) + 6*@4*pow(@0, 2)*pow((1-@0),2) + 4*@5*(1-@0)*pow(@0, 3) + @6*pow(@0, 4))*(@7*@8+1)', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s},{!s}], x6{!s}[{!s}, {!s},{!s}], :observable:, Lin0{!s}[-0.0001, -0.1, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel, self.fitpar[5], self.fitpardn[5],self.fitparup[5], self.channel+self.region)
+
+
+        if self.fitname == "ExpoPolO2":
+            functiontext = '''<ModelItem Name="EXPR::ExpoPolO2{!s}('exp( -(@1 + @2*@0+ @3*pow(@0, 2) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2])
+
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::ExpoPolO2{!s}('exp( -(@1 + @2*@0+ @3*pow(@0, 2)*(@4*@5+1) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.1, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel+self.region)
+
+        if self.fitname == "ExpoPolO3":
+            functiontext = '''<ModelItem Name="EXPR::ExpoPolO3{!s}('exp( -(@1 + @2*@0+ @3*pow(@0, 2) +@4*pow(@0,3) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3])
+
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::ExpoPolO3{!s}('exp( -(@1 + @2*@0+ @3*pow(@0, 2) +@4*pow(@0,3)*(@5*@6+1) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.1, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel+self.region)
+
+        if self.fitname == "ExpoPolO4":
+            functiontext = '''<ModelItem Name="EXPR::ExpoPolO4{!s}('exp( -(@1 + @2*@0+ @3*pow(@0, 2) +@4*pow(@0,3) +@5*pow(@0,4) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s}, {!s}])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4])
+
+            if "SR" in self.region:
+                functiontext = '''<ModelItem Name="EXPR::ExpoPolO4{!s}('exp( -(@1 + @2*@0+ @3*pow(@0, 2) +@4*pow(@0,3) +@5*pow(@0,4)*(@6*@7+1) )', x, x1{!s}[{!s}, {!s}, {!s}], x2{!s}[{!s}, {!s}, {!s}], x3{!s}[{!s}, {!s}, {!s}], x4{!s}[{!s}, {!s}, {!s}], x5{!s}[{!s}, {!s}, {!s}], :observable:, Lin0{!s}[-0.0001, -0.1, 1])"/>'''.format(self.region, self.channel, self.fitpar[0], self.fitpardn[0],self.fitparup[0], self.channel, self.fitpar[1], self.fitpardn[1],self.fitparup[1], self.channel, self.fitpar[2], self.fitpardn[2],self.fitparup[2], self.channel, self.fitpar[3], self.fitpardn[3],self.fitparup[3], self.channel, self.fitpar[4], self.fitpardn[4],self.fitparup[4], self.channel+self.region)
+
+
+
 
         self.xmlform = functiontext
 
-        fit_results_xml = open("FitFiles_"+self.channel+"/bkg_"+self.fitname+"_"+self.region+".xml", "a")
+        fit_results_xml = open("FitFiles_"+self.channel+self.period+"/bkg_"+self.fitname+"_"+self.region+".xml", "a")
 
         fit_results_xml.write('''<!DOCTYPE Model SYSTEM '../AnaWSBuilder.dtd'>'''+"\n")
         fit_results_xml.write('''<Model Type="UserDef">'''+"\n")
